@@ -1,0 +1,1887 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="theme-color" content="#121019">
+<title>Lune FM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one-column radio face. Station header and tuning dial on top, the live "now" panel,
+   then the lineup. Bottom tab bar. Dark-first because it's a late-night station. */
+:root{
+  --bg:#121019; --panel:#1b1724; --panel-2:#252032; --line:#342c45;
+  --fg:#f1e9df; --muted:#a79db4; --faint:#6f6681;
+  --accent:#f0a14a; --accent-ink:#1b1206; --accent-soft:rgba(240,161,74,.14);
+  --live:#ff5a4e; --good:#7fd1a6; --warn:#f3c969;
+  --f-display:"Gloock","Iowan Old Style",Georgia,serif;
+  --f-body:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r:14px;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#ebe7f0; --panel:#f8f6fb; --panel-2:#e1dbe9; --line:#cdc4da;
+    --fg:#1d1727; --muted:#5d5469; --faint:#8a8197;
+    --accent:#a9580f; --accent-ink:#fff8ef; --accent-soft:rgba(169,88,15,.12);
+    --live:#d23a2e; --good:#1f7a50; --warn:#9a6a00;
+    color-scheme:light;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button{font:inherit;color:inherit}
+a{color:var(--accent);text-underline-offset:2px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.muted{color:var(--muted)}
+
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:calc(env(safe-area-inset-top,0px) + 14px) calc(env(safe-area-inset-bottom,0px) + 100px)}
+body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)}
+
+/* Header */
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.station{font-family:var(--f-display);font-size:2.1rem;line-height:1;letter-spacing:.005em;overflow-wrap:anywhere}
+.freq{font:500 .78rem/1 var(--f-mono);color:var(--muted);letter-spacing:.1em;margin-top:8px}
+.onair{flex:none;display:inline-flex;align-items:center;gap:8px;font:600 .7rem/1 var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--faint);border:1px solid var(--line);border-radius:999px;padding:8px 12px}
+.onair .lamp{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.onair.live{color:var(--live);border-color:color-mix(in srgb,var(--live) 55%,transparent)}
+.onair.live .lamp{background:var(--live);animation:lamp 1.6s ease-out infinite}
+@keyframes lamp{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--live) 70%,transparent)}100%{box-shadow:0 0 0 9px transparent}}
+.dateline{font-size:.88rem;color:var(--muted);margin-top:12px}
+
+/* Tuning dial */
+.dial{position:relative;height:54px;margin:12px 0 22px;border-radius:12px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+.ticks{position:absolute;left:16px;right:16px;top:8px;height:20px;border-right:1px solid var(--muted);
+  background-image:repeating-linear-gradient(90deg,var(--muted) 0 1px,transparent 1px 10%),repeating-linear-gradient(90deg,var(--faint) 0 1px,transparent 1px 2%);
+  background-size:100% 100%,100% 55%;background-repeat:no-repeat;background-position:0 0,0 100%}
+.dialnums{position:absolute;left:16px;right:16px;bottom:7px;height:12px;font:500 .62rem/1 var(--f-mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.dialnums span{position:absolute;transform:translateX(-50%)}
+.needle{position:absolute;top:5px;bottom:5px;width:2px;border-radius:2px;background:var(--accent);box-shadow:0 0 14px var(--accent);
+  left:calc(16px + (100% - 32px) * var(--pos,.035));transition:left .9s cubic-bezier(.2,.8,.2,1)}
+.dial.tuning .needle{animation:sweep 2.6s ease-in-out infinite alternate}
+@keyframes sweep{from{left:calc(16px + (100% - 32px) * .06)}to{left:calc(16px + (100% - 32px) * .94)}}
+
+/* Type + buttons */
+.display{font-family:var(--f-display);font-weight:400;font-size:clamp(1.75rem,6.4vw,2.35rem);line-height:1.08;margin:0;text-wrap:balance}
+.lede{color:var(--muted);max-width:42ch;margin:10px 0 18px}
+.eyebrow{display:block;font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:11px 18px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;text-decoration:none;color:var(--fg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn.small{min-height:38px;padding:8px 14px;font-size:.9rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn svg{width:18px;height:18px;fill:currentColor;flex:none}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.notice{border:1px solid color-mix(in srgb,var(--warn) 50%,var(--line));background:color-mix(in srgb,var(--warn) 9%,var(--panel));border-radius:var(--r);padding:14px 16px;margin:0 0 16px}
+.notice p{margin:4px 0 12px;color:var(--muted)}
+.notice strong{display:block}
+
+/* Generating */
+.gen{display:grid;gap:12px;margin:0 0 20px}
+.step{display:flex;align-items:center;gap:12px;color:var(--muted)}
+.step .dot{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid var(--faint)}
+.step.run .dot{border-color:var(--accent);border-right-color:transparent;animation:spin .8s linear infinite}
+.step.done{color:var(--fg)} .step.done .dot{background:var(--good);border-color:var(--good)}
+.step.fail .dot{background:var(--live);border-color:var(--live)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Now panel */
+.showhead{display:grid;gap:8px;margin-top:4px}
+.now{display:grid;gap:14px;margin:16px 0 0}
+.nowlabel{display:flex;align-items:center;gap:8px;font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
+.mic{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
+.mic.on{background:var(--accent);animation:pulse .9s ease-in-out infinite alternate}
+@keyframes pulse{from{opacity:.35;transform:scale(.8)}to{opacity:1;transform:scale(1.15)}}
+.talkwrap{display:grid;gap:4px}
+.hostname{font-size:.82rem;font-weight:600;color:var(--muted)}
+.talk{font-size:1.1rem;line-height:1.55;margin:0;max-width:60ch}
+.trackinfo{display:grid;gap:3px;padding-top:2px}
+.t-title{font-family:var(--f-display);font-size:1.55rem;line-height:1.15;overflow-wrap:anywhere}
+.t-artist{color:var(--muted);font-weight:600}
+.t-why{font-size:.92rem;color:var(--muted)}
+.t-link{font-size:.88rem;margin-top:4px;justify-self:start}
+.video{position:relative;width:100%;max-width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}
+.video iframe,.video #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
+.hint{margin:0;font-size:.9rem;color:var(--warn)}
+.transport{display:flex;gap:10px;align-items:center}
+.transport .grow{flex:1}
+.verdicts{display:flex;flex-wrap:wrap;gap:8px}
+.chip{appearance:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 13px;font-size:.88rem;font-weight:600;cursor:pointer;min-height:40px;color:var(--fg)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* Briefing */
+.brief{margin-top:14px}
+.brief summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-weight:700}
+.brief summary::-webkit-details-marker{display:none}
+.brief summary .muted{font-weight:500;font-size:.85rem}
+.brief ul{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:14px}
+.brief li{display:grid;gap:3px;min-width:0}
+.cat{font:500 .64rem/1 var(--f-mono);letter-spacing:.13em;text-transform:uppercase;color:var(--accent)}
+.hl{font-weight:600;overflow-wrap:anywhere}
+.dt{font-size:.92rem;color:var(--muted)}
+
+/* Lineup */
+.section{font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px}
+.lineup{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.row{display:grid;grid-template-columns:2em minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.num{font:500 .8rem/1 var(--f-mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.row-main{all:unset;cursor:pointer;display:grid;gap:1px;min-width:0;padding:4px 0}
+.row-main:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.r-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-artist{font-size:.88rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status{color:var(--accent)}
+.tag{font:500 .6rem/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:5px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.new{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+.heart{all:unset;cursor:pointer;width:38px;height:38px;display:grid;place-items:center;border-radius:50%;color:var(--faint)}
+.heart:focus-visible{outline:2px solid var(--accent)}
+.heart svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8}
+.heart.on{color:var(--live)} .heart.on svg{fill:currentColor}
+.row.is-now .num,.row.is-now .r-title{color:var(--accent)}
+.row.is-played .r-title,.row.is-played .r-artist{opacity:.55}
+.row.is-missing .r-title{text-decoration:line-through;opacity:.5}
+.showfoot{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:18px;color:var(--muted);font-size:.86rem}
+
+/* History */
+.seg{display:inline-grid;grid-template-columns:1fr 1fr;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;margin:16px 0}
+.seg button{appearance:none;border:0;background:transparent;padding:8px 16px;border-radius:999px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg button.on{background:var(--panel-2);color:var(--fg)}
+.hist{border-top:1px solid var(--line)}
+.hshow{border-bottom:1px solid var(--line);padding:12px 0}
+.hshow summary{cursor:pointer;list-style:none;display:grid;gap:2px}
+.hshow summary::-webkit-details-marker{display:none}
+.h-title{font-weight:700}
+.h-meta{font-size:.86rem;color:var(--muted)}
+.htracks{list-style:none;padding:0;margin:12px 0;display:grid;gap:10px}
+.htracks li{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:.93rem}
+.htracks .tt{min-width:0;overflow-wrap:anywhere}
+.ytm{font-size:.84rem;white-space:nowrap}
+.loved li{align-items:center}
+
+/* Settings */
+.form{display:grid;gap:30px;margin-top:18px}
+fieldset{border:0;margin:0;padding:0;display:grid;gap:16px;min-width:0}
+legend{font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;padding:0}
+label.f{display:grid;gap:6px;font-weight:600;font-size:.93rem;min-width:0}
+.f small,.note{font-weight:400;color:var(--muted);font-size:.86rem}
+.note{margin:0}
+input[type=text],input[type=password],textarea,select{font:inherit;font-weight:400;font-size:1rem;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0}
+textarea{min-height:124px;resize:vertical;line-height:1.45}
+.keyrow{display:flex;gap:8px;min-width:0}
+.keyrow input{flex:1}
+.switch{display:flex;align-items:center;justify-content:space-between;gap:14px;font-weight:600;font-size:.93rem}
+.switch input{width:22px;height:22px;accent-color:var(--accent);flex:none}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:380px){.two{grid-template-columns:1fr}}
+.testout{font-size:.9rem;display:grid;gap:4px}
+.ok{color:var(--good)} .bad{color:var(--live)}
+.guide summary{cursor:pointer;font-weight:700}
+.guide h3{font-size:.98rem;margin:16px 0 0}
+.guide ol{padding-left:1.25em;margin:8px 0 0;display:grid;gap:7px}
+.guide p{margin:12px 0 0;color:var(--muted);font-size:.9rem}
+code{font-family:var(--f-mono);font-size:.84em;background:var(--panel-2);padding:2px 5px;border-radius:5px;overflow-wrap:anywhere}
+
+/* Studio: hosts on the mic */
+.studio{display:flex;flex-wrap:wrap;gap:6px}
+.hchip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:5px 10px 5px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.hdot{width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent));flex:none}
+.hchip.on{color:var(--fg);border-color:var(--hc);background:color-mix(in srgb,var(--hc) 18%,transparent)}
+.topicline{margin:0;font-size:.92rem;color:var(--muted)}
+.convo{display:grid;gap:12px}
+.line{display:grid;gap:3px;opacity:.5;transition:opacity .2s}
+.line.is-live{opacity:1}
+.who{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted)}
+.who::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent))}
+.line p{margin:0;font-size:1rem;line-height:1.5;max-width:60ch}
+.line.is-live p{font-size:1.1rem}
+.line.thinking p{color:var(--muted)}
+
+/* Host editor */
+.hosts-ed{display:grid;gap:10px}
+.hostcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}
+.hostcard.off{opacity:.62}
+.hostcard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;min-width:0}
+.hostcard summary::-webkit-details-marker{display:none}
+.hostcard summary .hdot{width:12px;height:12px}
+.hname{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hmeta{margin-left:auto;font-size:.8rem;color:var(--muted);white-space:nowrap}
+.hostbody{display:grid;gap:14px;margin-top:14px}
+.notebook ul{margin:8px 0 0;padding-left:1.1em;color:var(--muted);font-size:.9rem;display:grid;gap:4px}
+
+/* Bars */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;justify-content:center}
+.tabs-in{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%;max-width:528px}
+.tab{appearance:none;border:0;background:transparent;color:var(--muted);font-weight:600;font-size:.92rem;padding:10px 6px;border-radius:10px;cursor:pointer;min-height:44px}
+.tab.on{color:var(--fg);background:var(--panel-2)}
+.mini{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);z-index:9;display:flex;justify-content:center;padding:0 12px}
+.mini-in{width:100%;max-width:536px;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px 6px 6px 14px;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+.mini-txt{all:unset;cursor:pointer;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.92rem;font-weight:600}
+.mini .btn{min-height:40px;padding:8px 12px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 82px);transform:translate(-50%,8px);z-index:20;width:max-content;max-width:min(92vw,480px);background:var(--fg);color:var(--bg);padding:12px 16px;border-radius:12px;font-size:.93rem;font-weight:500;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+@media (prefers-reduced-motion:reduce){
+  .dial.tuning .needle,.onair.live .lamp,.mic.on,.step.run .dot{animation:none}
+  .needle,.toast{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <div>
+      <div class="station" id="stationName">Lune FM</div>
+      <div class="freq"><span id="freqNum">88.7</span> FM</div>
+    </div>
+    <div class="onair" id="onair"><span class="lamp"></span>On air</div>
+  </header>
+  <div class="dateline" id="dateline"></div>
+  <div class="dial" id="dial" aria-hidden="true">
+    <div class="ticks"></div>
+    <div class="dialnums"><span style="left:0%">88</span><span style="left:20%">92</span><span style="left:40%">96</span><span style="left:60%">100</span><span style="left:80%">104</span><span style="left:100%">108</span></div>
+    <div class="needle" id="needle"></div>
+  </div>
+
+  <!-- ON AIR -->
+  <main id="view-air">
+    <div class="notice" id="previewNote" hidden>
+      <strong>Open this from your GitHub Pages link.</strong>
+      <p>This looks like a downloaded copy or a preview. YouTube and Claude only work when the page is hosted.</p>
+    </div>
+    <div class="notice" id="setupCard" hidden>
+      <strong>Two keys and you're on air.</strong>
+      <p>The host runs on a Claude API key, and a free YouTube key finds the songs. The steps are in Settings and take about ten minutes.</p>
+      <button class="btn small" data-go="settings">Open Settings</button>
+    </div>
+
+    <section id="genPanel" hidden>
+      <span class="eyebrow">Tuning in</span>
+      <div class="gen" id="genSteps" style="margin-top:14px"></div>
+    </section>
+
+    <section id="emptyCard" hidden>
+      <h1 class="display">Nothing on air yet today.</h1>
+      <p class="lede" id="emptyLede">Your host will pick today's songs and check the week in hip-hop. It takes about a minute.</p>
+      <div class="btnrow">
+        <button class="btn primary" id="makeBtn">Make today's show</button>
+        <button class="btn ghost" id="openLastBtn" hidden>Open your last show</button>
+      </div>
+    </section>
+
+    <section id="showArea" hidden>
+      <div class="showhead">
+        <span class="eyebrow" id="showDate"></span>
+        <h1 class="display" id="showTitle"></h1>
+      </div>
+
+      <div class="now panel" id="nowPanel">
+        <div class="nowlabel"><span class="mic" id="micDot"></span><span id="nowLabel">Ready when you are</span></div>
+        <div class="studio" id="studio" hidden></div>
+        <p class="topicline" id="topicLine" hidden></p>
+        <div class="convo" id="convo" hidden aria-live="polite"></div>
+        <p class="talk" id="talkText"></p>
+        <div class="trackinfo" id="trackInfo" hidden>
+          <span class="eyebrow" id="tUp" style="margin-bottom:6px">Up next</span>
+          <div class="t-title" id="tTitle"></div>
+          <div class="t-artist" id="tArtist"></div>
+          <div class="t-why" id="tWhy"></div>
+          <a class="t-link" id="tLink" href="#" target="_blank" rel="noopener">Open in YouTube Music</a>
+        </div>
+        <div class="video" id="videoBox" hidden><div id="yt"></div></div>
+        <p class="hint" id="tapHint" hidden>If the song doesn't start, tap play on the video once. After that the show runs on its own.</p>
+        <div class="transport">
+          <button class="btn primary grow" id="playBtn">Start the show</button>
+          <button class="btn" id="nextBtn" aria-label="Next">Next</button>
+        </div>
+        <div class="verdicts" id="verdicts" hidden>
+          <button class="chip" data-verdict="love">Love it</button>
+          <button class="chip" data-verdict="more">More like this</button>
+          <button class="chip" data-verdict="skip">Not for me</button>
+        </div>
+      </div>
+
+      <details class="brief panel" id="briefBox" hidden>
+        <summary><span>The week in hip-hop</span><span class="muted" id="briefCount"></span></summary>
+        <p class="note" id="briefBy" style="margin-top:6px"></p>
+        <ul id="briefList"></ul>
+      </details>
+
+      <h2 class="section">The lineup</h2>
+      <ol class="lineup" id="lineup"></ol>
+
+      <div class="showfoot">
+        <span id="showMeta"></span>
+        <button class="btn ghost small" id="newShowBtn">Make a new show</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- HISTORY -->
+  <section id="view-history" hidden>
+    <h1 class="display">History</h1>
+    <div class="seg" id="histSeg" role="tablist">
+      <button data-h="shows" class="on">Shows</button>
+      <button data-h="loved">Loved songs</button>
+    </div>
+    <div id="histList"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-settings" hidden>
+    <h1 class="display">Settings</h1>
+    <form class="form" id="settingsForm" autocomplete="off">
+      <details class="panel guide" id="guide">
+        <summary>How to get your two keys</summary>
+        <h3>Claude API key (runs the host)</h3>
+        <ol>
+          <li>Go to <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> and sign in or make an account.</li>
+          <li>Open Settings, then Billing. Add a payment method and a small amount of credit.</li>
+          <li>Open Settings, then Limits. Set a monthly limit, like $5. The station can never spend more than that.</li>
+          <li>Open Settings, then API Keys. Tap Create Key, name it Lune FM, and copy it. It starts with <code>sk-ant-</code> and only shows once.</li>
+          <li>Paste it in the Claude API key box below.</li>
+        </ol>
+        <h3>YouTube API key (finds the songs, free)</h3>
+        <ol>
+          <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener">console.cloud.google.com</a>, sign in with your Google account, and create a project called Lune FM.</li>
+          <li>Open APIs and Services, then Library. Search for YouTube Data API v3 and tap Enable.</li>
+          <li>Open APIs and Services, then Credentials. Tap Create credentials, then API key, and copy it.</li>
+          <li>Edit the key. Under Application restrictions, pick Websites and add <code id="originCode">https://your-name.github.io/*</code>. Under API restrictions, pick YouTube Data API v3. Save.</li>
+          <li>Paste it in the YouTube API key box below.</li>
+        </ol>
+        <p>Then tap Test keys. Your keys stay in this browser only. They are not in the page's code, so your GitHub page never shows them.</p>
+      </details>
+
+      <fieldset>
+        <legend>Keys</legend>
+        <label class="f" for="s-claudeKey">Claude API key
+          <span class="keyrow"><input type="password" id="s-claudeKey" placeholder="sk-ant-..." spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-claudeKey">Show</button></span>
+        </label>
+        <label class="f" for="s-ytKey">YouTube API key
+          <span class="keyrow"><input type="password" id="s-ytKey" placeholder="AIza..." spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ytKey">Show</button></span>
+          <small>Free. About 100 song lookups a day, and the station remembers songs it already found.</small>
+        </label>
+        <div class="btnrow"><button type="button" class="btn small" id="testBtn">Test keys</button></div>
+        <div class="testout" id="testOut" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Your station</legend>
+        <label class="f" for="s-listener">Your name<input type="text" id="s-listener"></label>
+        <div class="two">
+          <label class="f" for="s-station">Station name<input type="text" id="s-station"></label>
+          <label class="f" for="s-freq">Frequency<input type="text" id="s-freq" inputmode="decimal"></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Hosts</legend>
+        <p class="note">Each host is its own Claude agent with its own personality, voice and notebook. They share the mic, react to each other, and react to what you love or skip.</p>
+        <div class="hosts-ed" id="hostsEd"></div>
+        <div class="btnrow"><button type="button" class="btn small" id="addHost">Add a host</button></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>On-air chatter</legend>
+        <label class="f" for="s-topics">Topics the hosts can go off on
+          <textarea id="s-topics"></textarea>
+          <small>Separate with commas. Topic breaks are opinions and jokes, not news.</small>
+        </label>
+        <label class="f" for="s-topicBreaks">Topic breaks per show
+          <select id="s-topicBreaks"><option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+        </label>
+        <label class="f" for="s-houseRules">House rules for every host
+          <textarea id="s-houseRules"></textarea>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Your taste</legend>
+        <label class="f" for="s-artists">Artists you love
+          <textarea id="s-artists"></textarea>
+          <small>Separate with commas. The host leans on these but finds new people too.</small>
+        </label>
+        <label class="f" for="s-tasteNotes">What you like about music
+          <textarea id="s-tasteNotes"></textarea>
+        </label>
+        <div class="two">
+          <label class="f" for="s-trackCount">Songs per show
+            <select id="s-trackCount"><option value="6">6</option><option value="8">8</option><option value="10">10</option><option value="12">12</option></select>
+          </label>
+          <label class="f" for="s-mix">Mix
+            <select id="s-mix"><option value="new">Mostly new finds</option><option value="balanced">Half and half</option><option value="familiar">Mostly favorites</option></select>
+          </label>
+        </div>
+        <label class="switch" for="s-briefingOn">Start each show with the week in hip-hop<input type="checkbox" id="s-briefingOn"></label>
+        <label class="f" for="s-briefFocus">What the news should cover
+          <textarea id="s-briefFocus"></textarea>
+          <small>The news uses web search, about a cent per search, up to four per show.</small>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Voices</legend>
+        <label class="switch" for="s-voiceOn">Read the hosts' lines out loud<input type="checkbox" id="s-voiceOn"></label>
+        <p class="note">Voices come from your phone. Pick a voice, pitch and speed for each host above so they sound different. If a voice sounds robotic, try another.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Behind the scenes</legend>
+        <label class="f" for="s-directorModel">Song picker and news writer
+          <select id="s-directorModel">
+            <option value="claude-sonnet-5-5">Sonnet 5.5, recommended</option>
+            <option value="claude-haiku-5-5">Haiku 5.5, cheapest</option>
+            <option value="claude-opus-5-5">Opus 5.5, costs most</option>
+          </select>
+          <small>Runs once per show to plan the songs, who's on the mic, and the topic breaks. Real songs matter most here, so it starts on Sonnet. Every show lists what it cost.</small>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Your data</legend>
+        <p class="note">Shows, loved songs and settings live in this browser. Export a backup now and then. Backups never include your keys.</p>
+        <div class="btnrow">
+          <button type="button" class="btn small" id="exportBtn">Export backup</button>
+          <button type="button" class="btn small" id="importBtn">Import backup</button>
+          <button type="button" class="btn small ghost" id="clearBtn">Clear history</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+      </fieldset>
+    </form>
+  </section>
+</div>
+
+<div class="mini" id="mini" hidden>
+  <div class="mini-in">
+    <button class="mini-txt" id="miniTxt" data-go="air"></button>
+    <button class="btn small" id="miniPlay">Pause</button>
+  </div>
+</div>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="tabs-in">
+    <button class="tab on" data-view="air">On air</button>
+    <button class="tab" data-view="history">History</button>
+    <button class="tab" data-view="settings">Settings</button>
+  </div>
+</nav>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<noscript><p style="padding:16px">Lune FM needs JavaScript turned on.</p></noscript>
+
+<script>
+(() => {
+'use strict';
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad2 = n => String(n).padStart(2, '0');
+const localDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+const partOfDay = d => { const h = d.getHours(); return h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 21 ? 'evening' : 'late night'; };
+const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+const trackKey = t => norm(t.artist) + '|' + norm(t.title);
+const cleanHost = s => String(s || '').replace(/\s*[—–]\s*/g, ', ').replace(/,\s*([,.!?])/g, '$1').replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
+const fmtCost = c => !c ? '' : c < 0.01 ? 'under 1¢' : c < 1 ? `${Math.round(c * 100)}¢` : `$${c.toFixed(2)}`;
+const urlKey = u => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/[#?].*$/, '').replace(/\/$/, '').toLowerCase();
+const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
+const reEsc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const modelName = m => ({ 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5', 'claude-opus-5-5': 'Opus 5.5' })[m] || m;
+class UserError extends Error { constructor(m, o = {}) { super(m); this.fatal = !!o.fatal; } }
+
+const ICON = {
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.2-4.4-9.2-8.8C1.4 8.5 3.4 4.8 6.9 4.8c2 0 3.4 1.1 4.1 2.3.8-1.2 2.1-2.3 4.1-2.3 3.5 0 5.5 3.7 4.1 6.9-2 4.4-9.2 8.8-9.2 8.8z"/></svg>'
+};
+
+/* ---------- state ---------- */
+const LS_KEY = 'lunefm.v1';
+const PRICES = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.10, 0.50], 'claude-opus-5-5': [4, 20] }; // $ per million tokens
+const SEARCH_PRICE = 0.01;
+const HOST_COLORS = ['#e0913a', '#d9677e', '#2fa59a', '#8f7ae0', '#5aa86a', '#c9a227', '#4f8fd6', '#c26bc4'];
+const HAIKU = 'claude-haiku-5-5';
+const DEFAULT_HOSTS = [
+  { id: 'jules', name: 'Jules', color: HOST_COLORS[0], model: HAIKU, enabled: true, voiceName: '', pitch: 1, rate: 1, notebook: [],
+    personality: 'The anchor. Smooth late-night R&B voice, warm and unhurried. Loves the stories behind songs: who produced it, what it sampled. Plays referee when the others get wild, but laughs at everything. Music lane: R&B, slow jams, quiet storm.' },
+  { id: 'dez', name: 'Dez', color: HOST_COLORS[1], model: HAIKU, enabled: true, voiceName: '', pitch: 1.12, rate: 1.08, notebook: [],
+    personality: 'Hype energy. Loud, funny, quick with a comeback. Lives for bars, beat switches and producers. Takes it personally, in a funny way, when one of his picks gets skipped. Music lane: hip-hop, from boom bap to the newest underground rappers.' },
+  { id: 'ada', name: 'Ada', color: HOST_COLORS[2], model: HAIKU, enabled: true, voiceName: '', pitch: 1.05, rate: 1, notebook: [],
+    personality: 'Cool and dry. Never raises her voice and still wins every argument. Deep in Nigerian and diaspora music. Runs the news desk. Music lane: Afro-R&B, alté, Afrobeats, UK and Canadian R&B.' },
+  { id: 'milo', name: 'Milo', color: HOST_COLORS[3], model: HAIKU, enabled: true, voiceName: '', pitch: 1.2, rate: 1.05, notebook: [],
+    personality: 'The station nerd. Tech, gadgets, anime and video games, and he connects everything back to them. Goes on tangents, makes terrible puns, gets roasted for it and loves it. Music lane: alt R&B, lo-fi, internet-born artists, anime and game soundtracks with soul.' },
+  { id: 'nova', name: 'Nova', color: HOST_COLORS[4], model: HAIKU, enabled: true, voiceName: '', pitch: 0.88, rate: 0.95, notebook: [],
+    personality: 'Old soul crate digger. Jazz, neo-soul and vinyl culture. Talks a little poetic and dramatic, and the others tease her for it. Secretly the funniest when she drops a one-liner. Music lane: jazz, neo-soul, jazz and hip-hop crossovers, classic soul samples.' }
+];
+const DEFAULT_SETTINGS = {
+  claudeKey: '', ytKey: '',
+  listener: 'Lune', station: 'Lune FM', freq: '88.7',
+  artists: 'Brent Faiyaz, Lucky Daye, dvsn, GIVĒON, Ovi Wood, Odeal, Isaiah Falls, Olivia Dean, Mac Miller, Kendrick Lamar, 6LACK, Isaiah Rashad, Robert Glasper',
+  tasteNotes: 'R&B at the core with a deep hip-hop foundation. Loves the most melodic, atmospheric cuts in any catalog, and songs where two voices share the same intimate register. Strong Nigerian and diaspora thread. Into jazz and vinyl culture. Likes finding artists before they blow up.',
+  briefFocus: "Don't center the news on Kendrick Lamar, 6LACK, dvsn or Isaiah Rashad. Cover similar artists and the whole hip-hop world: new music, tours and shows, movies and TV, fashion and culture.",
+  trackCount: 8, mix: 'new', briefingOn: true,
+  topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
+  topicBreaks: 2,
+  houseRules: 'Keep it fun and loose. Light cursing is fine. Tease each other all you want, but be good to the listener: never compare them to anyone, never rush them, always use their name. No jokes about real people’s looks or identities.',
+  voiceOn: true,
+  directorModel: 'claude-sonnet-5-5',
+  newsHost: 'ada',
+  hosts: DEFAULT_HOSTS
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+const freshState = () => ({ v: 2, settings: clone(DEFAULT_SETTINGS), shows: [], feedback: [], played: [], ytCache: {}, currentShowId: null });
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) {
+      const d = JSON.parse(raw), base = freshState();
+      const old = d.settings || {};
+      const settings = { ...base.settings, ...old };
+      if (!Array.isArray(old.hosts) || !old.hosts.length) {
+        settings.hosts = clone(DEFAULT_HOSTS);
+        // carry over a v1 single host if it was customized
+        if (old.host && old.host !== 'Jules') settings.hosts[0].name = old.host;
+        if (old.voiceName) settings.hosts[0].voiceName = old.voiceName;
+        if (old.model && !old.directorModel) settings.directorModel = old.model;
+      }
+      ['host', 'hostStyle', 'voiceName', 'rate', 'model'].forEach(k => delete settings[k]);
+      return { ...base, ...d, v: 2, settings };
+    }
+  } catch (e) {}
+  return freshState();
+}
+let S = loadState();
+function save() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(S)); }
+  catch (e) { toast("Couldn't save to this browser. Storage may be full or blocked."); }
+}
+let saveT = null;
+const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 300); };
+
+const UI = { view: 'air', histTab: 'shows', showOpen: false, armed: {} };
+const Gen = { busy: false, steps: [] };
+const Eng = { show: null, segs: [], i: -1, running: false, paused: false, token: 0, pending: null, cancelTalk: null, error: null, watch: null, speaker: null, thinking: null, saying: null, poll: null };
+const currentShow = () => S.shows.find(s => s.id === S.currentShowId) || null;
+const looksPreview = location.protocol === 'file:' || location.origin === 'null' || /claude|anthropic/i.test(location.hostname);
+
+/* ---------- hosts ---------- */
+const hosts = () => S.settings.hosts;
+const activeHosts = () => hosts().filter(h => h.enabled);
+const hostById = id => hosts().find(h => h.id === id) || null;
+const hostName = id => (hostById(id) || {}).name || 'A host';
+const anchorHost = () => activeHosts()[0] || hosts()[0];
+const newsHost = () => { const h = hostById(S.settings.newsHost); return h && h.enabled ? h : anchorHost(); };
+function nameToId(name) {
+  const n = norm(name);
+  if (!n || n === 'none') return null;
+  const h = activeHosts().find(x => norm(x.name) === n) || activeHosts().find(x => n.includes(norm(x.name)));
+  return h ? h.id : null;
+}
+const firstSentence = s => (String(s || '').match(/^[^.!?]+[.!?]?/) || [''])[0].trim();
+
+/* ---------- toast ---------- */
+let toastT = null;
+function toast(msg, ms = 3800) {
+  const el = $('#toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+/* ---------- Claude ---------- */
+function claudeErr(status, data) {
+  const msg = (data && data.error && data.error.message) || '';
+  if (status === 401) return 'Claude rejected your API key. Copy it again from the Claude Console and paste it in Settings.';
+  if (/credit balance/i.test(msg)) return 'Your Claude API account is out of credit. Add some in the Claude Console under Billing.';
+  if (/spend|usage limit/i.test(msg)) return 'You hit the monthly limit on your Claude API account. You can raise it in the Claude Console under Limits.';
+  if (status === 403) return "Your Claude API key doesn't have permission for this. Check it in the Claude Console.";
+  if (status === 404 && /model/i.test(msg)) return "That model isn't available on your account. Pick another one in Settings.";
+  if (status === 429) return 'Claude says too many requests right now. Wait a minute, then try again.';
+  if (status === 529 || status === 503 || /overloaded/i.test(msg)) return 'Claude is busy right now. Try again in a minute.';
+  return 'Claude returned an error' + (msg ? ': ' + msg : '.');
+}
+
+async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
+  const key = (S.settings.claudeKey || '').trim();
+  if (!key) throw new UserError('Add your Claude API key in Settings first.', { fatal: true });
+  model = model || S.settings.directorModel;
+  const first = { role: 'user', content: user };
+  const blocks = [];
+  const usage = { input: 0, output: 0, searches: 0 };
+  for (let round = 0; round < 4; round++) {
+    const messages = [first];
+    if (round > 0) {
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === 'text') last.text = last.text.replace(/\s+$/, '');
+      messages.push({ role: 'assistant', content: blocks });
+    }
+    const body = { model, max_tokens: maxTokens, system, messages };
+    if (tools) body.tools = tools;
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify(body)
+      });
+    } catch (e) {
+      throw new UserError(looksPreview ? 'Claude is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach Claude. Check your connection and try again.");
+    }
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new UserError(claudeErr(res.status, data), { fatal: res.status === 401 || res.status === 403 });
+    const u = data.usage || {};
+    usage.input += u.input_tokens || 0;
+    usage.output += u.output_tokens || 0;
+    usage.searches += (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
+    blocks.push(...(data.content || []));
+    if (data.stop_reason !== 'pause_turn') break;
+  }
+  const lastTool = blocks.map(b => b.type).lastIndexOf('web_search_tool_result');
+  const text = blocks.slice(lastTool + 1).filter(b => b.type === 'text').map(b => b.text).join('');
+  const urls = new Set();
+  for (const b of blocks) {
+    if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) b.content.forEach(r => r && r.url && urls.add(urlKey(r.url)));
+    if (b.type === 'text' && Array.isArray(b.citations)) b.citations.forEach(c => c && c.url && urls.add(urlKey(c.url)));
+  }
+  const [pi, po] = PRICES[model] || [2, 10];
+  const cost = usage.input * pi / 1e6 + usage.output * po / 1e6 + usage.searches * SEARCH_PRICE;
+  return { text, urls, usage, cost };
+}
+
+function extractJSON(text) {
+  let t = String(text || '').trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1];
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new UserError("The reply came back in the wrong shape. Try again.");
+  try { return JSON.parse(t.slice(a, b + 1)); }
+  catch (e) { throw new UserError("The reply came back in the wrong shape. Try again."); }
+}
+
+/* ---------- show planning (program director) ---------- */
+const MIX = {
+  new: 'Mostly new discoveries, about 6 in 10 songs, plus a few favorites and deep cuts.',
+  balanced: 'About half new discoveries, half favorites and deep cuts.',
+  familiar: 'Mostly favorites and deep cuts, with a couple of new discoveries.'
+};
+const normTag = t => { t = norm(t); return t.startsWith('deep') ? 'deep cut' : t.startsWith('fav') ? 'favorite' : 'new'; };
+const fmtT = f => `${f.artist} - ${f.title}`;
+
+function buildContext(now) {
+  return {
+    now,
+    dateText: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+    part: partOfDay(now),
+    loved: S.feedback.filter(f => f.verdict === 'love').slice(0, 30).map(fmtT),
+    more: S.feedback.filter(f => f.verdict === 'more').slice(0, 15).map(fmtT),
+    skipped: S.feedback.filter(f => f.verdict === 'skip').slice(0, 30).map(fmtT),
+    played: S.played.slice(0, 120).map(fmtT)
+  };
+}
+
+async function planShow(ctx) {
+  const st = S.settings, L = st.listener || 'Lune', ST = st.station || 'the station';
+  const crew = activeHosts();
+  const n = Number(st.trackCount) || 8;
+  const breaks = Math.min(3, Math.max(0, Number(st.topicBreaks) || 0));
+  const system = [
+    `You are the program director of ${ST}, a personal radio station made for one listener named ${L}. You plan each show for a crew of radio hosts. You never speak on air.`,
+    '',
+    'Rules:',
+    '- Only pick songs that really exist. Use the exact official song title and the main artist name as they appear on streaming services.',
+    '- Never repeat a song from the recently played list.',
+    '- Build a flow. Think about how each song hands off to the next: tempo, mood, era.',
+    "- Give each song to the host whose music lane fits it best, and spread the picks across the crew.",
+    '- Use host names exactly as written in the crew list.'
+  ].join('\n');
+  const lines = [
+    `Today is ${ctx.dateText}, ${ctx.part}. Plan a show with ${n} songs for ${L}.`,
+    '',
+    'The crew:',
+    ...crew.map(h => `- ${h.name}: ${h.personality}`),
+    '',
+    `Mix: ${MIX[st.mix] || MIX.new}`,
+    `Artists ${L} loves: ${st.artists}`,
+    `About ${L}'s taste: ${st.tasteNotes}`
+  ];
+  if (ctx.loved.length) lines.push(`Songs ${L} loved recently: ${ctx.loved.join('; ')}`);
+  if (ctx.more.length) lines.push(`${L} asked for more songs like: ${ctx.more.join('; ')}`);
+  if (ctx.skipped.length) lines.push(`Not for ${L}, so avoid these and anything close to them: ${ctx.skipped.join('; ')}`);
+  if (ctx.played.length) lines.push(`Recently played, do not repeat: ${ctx.played.join('; ')}`);
+  lines.push('',
+    breaks ? `Plan ${breaks} topic break${breaks > 1 ? 's' : ''} between songs, where 2 or 3 hosts go off on a tangent for a minute. Pick from these topics and give each one a specific, fun angle: ${st.topics}. Match topics to hosts who would have opinions about them.` : 'No topic breaks in this show.',
+    '',
+    'Reply with only a JSON object, no other text, in this shape:',
+    '{',
+    '  "show_title": "a short name for this show, 2 to 5 words",',
+    '  "opening_hosts": ["2 or 3 host names"],',
+    '  "songs": [',
+    '    {"artist": "main artist", "title": "exact song title", "tag": "new or favorite or deep cut", "why": "one short line for the screen, under 14 words", "picked_by": "host name", "on_mic": ["the host who picked it, and sometimes one more host"]}',
+    '  ],',
+    '  "topic_breaks": [{"after_song": 3, "topic": "the specific angle, one sentence", "hosts": ["2 or 3 host names"]}],',
+    '  "signoff_hosts": ["1 or 2 host names"]',
+    '}',
+    `"new" means an artist or song ${L} probably has not heard yet. "favorite" means a song by one of the artists ${L} loves. "deep cut" means a lesser-known song by an artist ${L} already knows. "after_song" is the number of the song the break comes after, counting from 1. About a third of songs should have two hosts on the mic.`
+  );
+  const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 4500, model: st.directorModel });
+  const d = extractJSON(r.text);
+
+  const anchor = anchorHost().id;
+  const toIds = (arr, max) => [...new Set((Array.isArray(arr) ? arr : [arr]).map(nameToId).filter(Boolean))].slice(0, max);
+  const otherHost = except => { const pool = activeHosts().filter(h => !except.includes(h.id)); return pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null; };
+
+  const songs = Array.isArray(d.songs) ? d.songs : (Array.isArray(d.tracks) ? d.tracks : []);
+  const breaksBy = new Map();
+  (Array.isArray(d.topic_breaks) ? d.topic_breaks : []).forEach(b => {
+    const idx = Number(b && b.after_song) - 1;
+    if (!(idx >= 0) || !b.topic) return;
+    let hs = toIds(b.hosts, 3);
+    while (hs.length < 2) { const o = otherHost(hs); if (!o) break; hs.push(o); }
+    breaksBy.set(idx, { topic: cleanHost(b.topic), hosts: hs });
+  });
+
+  const recent = new Set(S.played.slice(0, 150).map(p => p.k));
+  const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
+  const seen = new Set();
+  let carry = null;
+  const tracks = [];
+  songs.forEach((s, i) => {
+    const brk = breaksBy.get(i);
+    if (!s || !s.artist || !s.title) { if (brk) carry = brk; return; }
+    const t = { artist: String(s.artist).trim(), title: String(s.title).trim(), tag: normTag(s.tag), why: cleanHost(s.why), status: 'queued', verdict: null, videoIds: null, vi: 0 };
+    const k = trackKey(t);
+    if (seen.has(k) || recent.has(k) || fb.get(k) === 'skip') { if (brk) carry = brk; return; }
+    seen.add(k);
+    t.pickedBy = nameToId(s.picked_by) || anchor;
+    let mic = toIds(s.on_mic, 2);
+    if (!mic.includes(t.pickedBy)) mic = [t.pickedBy, ...mic].slice(0, 2);
+    t.onMic = mic;
+    const v = fb.get(k); if (v === 'love' || v === 'more') t.verdict = v;
+    if (carry && tracks.length) tracks[tracks.length - 1].topicAfter = carry;
+    carry = null;
+    if (brk) t.topicAfter = brk;
+    tracks.push(t);
+  });
+  if (tracks.length > 16) tracks.length = 16;
+  if (tracks.length) delete tracks[tracks.length - 1].topicAfter;
+  if (!tracks.length) throw new UserError("The song picker didn't send any new songs. Try again.");
+
+  let opening = toIds(d.opening_hosts, 3);
+  if (!opening.length) opening = [anchor];
+  if (opening.length < 2) { const o = otherHost(opening); if (o) opening.push(o); }
+  let signoff = toIds(d.signoff_hosts, 2);
+  if (!signoff.length) signoff = [anchor];
+
+  return { title: cleanHost(d.show_title) || "Today's show", tracks, opening, signoff, cost: r.cost };
+}
+
+async function genBriefing(ctx) {
+  const st = S.settings, L = st.listener || 'Lune', ST = st.station || 'the station', h = newsHost();
+  const system = [
+    `You are ${h.name}, a host on ${ST}, writing the news segment for ${L}'s show. Today is ${ctx.dateText}.`,
+    `Who you are: ${h.personality}`,
+    `Focus: ${st.briefFocus}`,
+    'Rules:',
+    '- Use web search. Only report things you found in results from the last seven days. Do not present rumors as fact.',
+    '- A speech engine reads the script out loud. No emojis, markdown, lists or em dashes.',
+    `- Use the name ${L} at most once. Never compare ${L} to other people.`,
+    '- Sound like yourself, with your personality, but keep the facts straight.'
+  ].join('\n');
+  const user = [
+    "Find this week's news across hip-hop and R&B: new music, tours and shows, movies and TV, fashion and culture. Use at most 4 searches.",
+    'Then reply with only a JSON object, no other text, in this shape:',
+    '{"script": "the spoken segment, 80 to 140 words. Open with a quick transition into the news and hand back to the music at the end.", "items": [{"category": "music or shows or film and tv or fashion or culture", "headline": "under 12 words", "detail": "one sentence", "url": "the source link from your search results"}]}',
+    'Include 3 to 6 items.'
+  ].join('\n');
+  const r = await callClaude({ system, user, maxTokens: 2000, model: st.directorModel, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }] });
+  const d = extractJSON(r.text);
+  const script = cleanHost(d.script);
+  if (!script) throw new UserError('The news came back empty.');
+  const items = (Array.isArray(d.items) ? d.items : []).filter(i => i && i.headline).slice(0, 6).map(i => {
+    const url = typeof i.url === 'string' && /^https?:\/\//i.test(i.url) && (r.urls.size === 0 || r.urls.has(urlKey(i.url))) ? i.url : '';
+    return { category: String(i.category || 'news').toLowerCase(), headline: cleanHost(i.headline), detail: cleanHost(i.detail), url };
+  });
+  return { briefing: { script, items, host: h.id }, cost: r.cost };
+}
+
+async function makeShow() {
+  if (Gen.busy) return;
+  const st = S.settings;
+  if (!st.claudeKey.trim() || !st.ytKey.trim()) { toast('Add both keys in Settings first.'); go('settings'); return; }
+  if (!activeHosts().length) { toast('Turn on at least one host in Settings.'); go('settings'); return; }
+  stopEverything();
+  S.shows.filter(s => !s.notebooked && s.log && s.log.length).slice(0, 2).forEach(s => updateNotebooks(s));
+  Gen.busy = true;
+  Gen.steps = [{ id: 'plan', label: 'Picking songs and deciding who’s on the mic', state: 'run' }];
+  if (st.briefingOn) Gen.steps.push({ id: 'brief', label: `${newsHost().name} is checking the week in hip-hop`, state: 'run' });
+  setTuning(true); go('air'); renderAll();
+  const mark = (id, state) => { const s = Gen.steps.find(x => x.id === id); if (s) s.state = state; renderGen(); };
+  const now = new Date(), ctx = buildContext(now);
+  try {
+    const planP = planShow(ctx).then(r => { mark('plan', 'done'); return r; }, e => { mark('plan', 'fail'); throw e; });
+    const briefP = st.briefingOn
+      ? genBriefing(ctx).then(r => { mark('brief', 'done'); return r; }, e => { mark('brief', 'fail'); return { error: e }; })
+      : Promise.resolve(null);
+    const [P, B] = await Promise.all([planP, briefP]);
+    const show = {
+      v: 2, id: 's' + now.getTime(), date: localDate(now), createdAt: now.toISOString(),
+      title: P.title, tracks: P.tracks, opening: P.opening, signoff: P.signoff,
+      briefing: B && !B.error ? B.briefing : null,
+      progress: 0, done: false, cost: P.cost + ((B && B.cost) || 0), log: [], notebooked: false
+    };
+    S.shows.unshift(show);
+    if (S.shows.length > 40) S.shows.length = 40;
+    S.currentShowId = show.id; UI.showOpen = true; save();
+    if (B && B.error) toast("The news didn't come through, so this show is music only. " + (B.error.message || ''), 6000);
+    else toast('Your show is ready. Tap Start the show.');
+    resolveTrack(show, 0, null, true);
+  } catch (e) {
+    toast(e.message || 'Something went wrong making the show. Try again.', 6000);
+  } finally {
+    Gen.busy = false; setTuning(false); renderAll();
+  }
+}
+
+/* ---------- host agents ---------- */
+function reactionText(t) {
+  const L = S.settings.listener || 'Lune';
+  if (t.verdict === 'skip') return `${L} hit Not for me on it`;
+  if (t.verdict === 'love') return `${L} hit Love it`;
+  if (t.verdict === 'more') return `${L} asked for more songs like it`;
+  if (t.cut) return `${L} skipped it before it finished`;
+  if (t.status === 'missing') return 'it could not be found on YouTube, so it got skipped';
+  return `${L} let it play all the way through`;
+}
+
+function previousTrack(show, segIndex) {
+  for (let j = segIndex - 1; j >= 0; j--) {
+    const s = Eng.segs[j];
+    if (s && s.kind === 'track') { const t = show.tracks[s.ti]; return t && (t.status === 'played' || t.status === 'missing') ? t : null; }
+  }
+  return null;
+}
+
+function hostSystem(h) {
+  const st = S.settings, L = st.listener || 'Lune';
+  const crew = activeHosts().filter(x => x.id !== h.id).map(x => `- ${x.name}: ${firstSentence(x.personality)}`).join('\n');
+  const nb = (h.notebook || []).length ? h.notebook.map(n => `- ${n}`).join('\n') : '- Nothing yet. This might be one of your first shows.';
+  return [
+    `You are ${h.name}, one of the hosts on ${st.station} (${st.freq} FM), a personal radio station made for one listener named ${L}.`,
+    `Who you are: ${h.personality}`,
+    '',
+    'The rest of the crew:',
+    crew || '- Nobody else today. You run the show solo.',
+    '',
+    `House rules: ${st.houseRules}`,
+    '',
+    'How you talk:',
+    '- Say one or two sentences, under 35 words. Quick, natural radio banter.',
+    `- Speak only as ${h.name}. Never write lines for the other hosts and never put your own name in front of your line.`,
+    `- React to what was just said, and to how ${L} reacted to the last song. Silly is welcome. Stay in character.`,
+    '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.',
+    '- Any song fact you state has to be true. If you are not sure, make a joke instead of stating a fact.',
+    `- Call ${L} only by that name. Never compare ${L} to other people and never tell ${L} to hurry.`,
+    '',
+    'Your notebook from past shows:',
+    nb
+  ].join('\n');
+}
+
+function lineContext(show, seg, segIndex, h, turn, priorLines) {
+  const st = S.settings, L = st.listener || 'Lune', now = new Date();
+  const crew = seg.hosts.map(hostName);
+  const others = seg.hosts.filter(id => id !== h.id).map(hostName);
+  const out = [`It's ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, ${partOfDay(now)}. You're live on today's show, "${show.title}".`];
+  out.push(`On the mic right now: ${crew.join(', ')}.`);
+  const prev = previousTrack(show, segIndex);
+  if (prev) out.push(`The last song was ${prev.title} by ${prev.artist}, ${hostName(prev.pickedBy)}'s pick. ${reactionText(prev)}.`);
+  if (seg.type === 'opening') {
+    out.push(`Your job right now: open the show. Greet ${L} and get the energy going.${show.briefing ? ` Don't read any news; ${hostName(show.briefing.host)} has the news right after this.` : ''}`);
+  } else if (seg.type === 'leadin') {
+    const t = show.tracks[seg.ti];
+    out.push(`Your job right now: bring in the next song, ${t.title} by ${t.artist}. It's ${hostName(t.pickedBy)}'s pick (${t.tag}${t.why ? `: ${t.why}` : ''}).`);
+    if (t.verdict === 'love' || t.verdict === 'more') out.push(`${L} has loved this one before.`);
+  } else if (seg.type === 'topic') {
+    out.push(`Your job right now: a quick break from the music. Go off on this topic: ${seg.topic} Be opinionated and silly. This is banter, not news, so don't state recent facts.`);
+  } else if (seg.type === 'signoff') {
+    out.push(`Your job right now: close out the show and say goodbye to ${L}.`);
+  }
+  if (priorLines.length) out.push('', 'Said so far in this moment:', ...priorLines.map(l => `${hostName(l.host)}: ${l.say}`));
+  else if (seg.type !== 'opening' && Eng.lastLine) out.push('', `Last thing said on air: ${hostName(Eng.lastLine.host)}: ${Eng.lastLine.say}`);
+  const isLast = turn + 1 >= seg.max || !others.length;
+  out.push('', `This is line ${turn + 1} of at most ${seg.max}.`);
+  if (isLast) out.push('You have the final line.');
+  else out.push(`You can hand off to ${others.join(' or ')}, or end the moment yourself.`);
+  if (seg.type === 'leadin') out.push('Whoever ends this moment must introduce the song by its title and artist.');
+  if (seg.type === 'topic') out.push('Whoever ends this moment wraps it up and gets back to the music.');
+  out.push('', 'Reply with only JSON: {"say": "your line", "hand_to": "a host name or none"}');
+  return out.join('\n');
+}
+
+function parseLine(text, h) {
+  let say = '', hand = '';
+  try { const d = extractJSON(text); say = String(d.say || ''); hand = String(d.hand_to || ''); }
+  catch (e) { say = String(text || '').replace(/[{}]/g, '').replace(/"?say"?\s*:\s*/i, '').replace(/"?hand_to"?\s*:.*$/is, ''); }
+  say = cleanHost(say.replace(/^["']|["']$/g, '').replace(new RegExp('^' + reEsc(h.name) + '\\s*:\\s*', 'i'), '').replace(/\[[^\]]*\]|\*[^*]*\*/g, ''));
+  return { say, hand };
+}
+
+async function genLine(show, seg, segIndex, hostId, turn, priorLines) {
+  const h = hostById(hostId) || anchorHost();
+  try {
+    const r = await callClaude({ system: hostSystem(h), user: lineContext(show, seg, segIndex, h, turn, priorLines), maxTokens: 220, model: h.model || HAIKU });
+    show.cost = (show.cost || 0) + r.cost;
+    const { say, hand } = parseLine(r.text, h);
+    if (!say) return { error: new UserError('empty') };
+    const isLast = turn + 1 >= seg.max;
+    let next = isLast ? null : nameToId(hand);
+    if (next === h.id || (next && !seg.hosts.includes(next))) next = null;
+    return { host: h.id, say, next };
+  } catch (e) { return { error: e }; }
+}
+
+async function updateNotebooks(show) {
+  if (show.notebooked || !show.log || !show.log.length) return;
+  show.notebooked = true; saveSoon();
+  const st = S.settings, L = st.listener || 'Lune';
+  const reactions = show.tracks.filter(t => t.status === 'played' || t.verdict).map(t => `- ${t.title} by ${t.artist}, ${hostName(t.pickedBy)}'s pick: ${reactionText(t)}`).join('\n') || '- No songs got played.';
+  const spoke = [...new Set(show.log.map(l => l.h))];
+  await Promise.all(spoke.map(async id => {
+    const h = hostById(id); if (!h) return;
+    const mine = show.log.filter(l => l.h === id).slice(-20).map(l => `- ${l.t}`).join('\n');
+    const others = show.log.filter(l => l.h !== id).slice(-12).map(l => `- ${hostName(l.h)}: ${l.t}`).join('\n');
+    const user = [
+      `The show "${show.title}" just ended.`, '', 'What you said:', mine, '', 'Some of what the others said:', others || '- Nothing.', '',
+      `How ${L} reacted to the songs:`, reactions, '',
+      'Your notebook right now:', (h.notebook || []).map(n => `- ${n}`).join('\n') || '- Empty.', '',
+      `Update your notebook so the next show feels like a continuation: running jokes, bits with the other hosts, your opinions, and what ${L} loves or skips from your picks. Keep at most 8 notes, each under 15 words. Drop stale ones. Write in your own voice.`,
+      'Reply with only JSON: {"notebook": ["note", "note"]}'
+    ].join('\n');
+    try {
+      const r = await callClaude({ system: `You are ${h.name}, a host on ${st.station}. Who you are: ${h.personality}`, user, maxTokens: 500, model: h.model || HAIKU });
+      const d = extractJSON(r.text);
+      if (Array.isArray(d.notebook)) h.notebook = d.notebook.map(cleanHost).filter(Boolean).slice(0, 8);
+      show.cost = (show.cost || 0) + r.cost;
+    } catch (e) {}
+  }));
+  save();
+  if (UI.view === 'settings') renderHostsEditor();
+}
+
+/* ---------- YouTube search ---------- */
+function ytErr(status, data) {
+  const reason = (data && data.error && data.error.errors && data.error.errors[0] && data.error.errors[0].reason) || '';
+  const msg = (data && data.error && data.error.message) || '';
+  if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') return "Today's YouTube lookups are used up. They reset at midnight Pacific time.";
+  if (reason === 'keyInvalid' || /API key not valid/i.test(msg)) return 'YouTube rejected your API key. Copy it again from Google Cloud and paste it in Settings.';
+  if (reason === 'accessNotConfigured' || /has not been used|is disabled/i.test(msg)) return 'YouTube Data API v3 is not turned on for your key. Turn it on in Google Cloud under APIs and Services, Library.';
+  if (/refer/i.test(msg) || reason === 'ipRefererBlocked' || reason === 'forbidden') return "Your YouTube key is locked to a different website. Add this page's address to the key's website restrictions.";
+  return 'YouTube search failed' + (msg ? ': ' + msg : '.');
+}
+
+const BAD_WORDS = ['live', 'cover', 'sped up', 'slowed', 'reverb', 'reaction', 'karaoke', 'instrumental', '8d', 'nightcore', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'chopped', 'review', 'piano'];
+function scoreVideo(v, artist, title) {
+  const t = norm(v.title), c = norm(v.channel), a = norm(artist);
+  const s = norm(String(title).replace(/\s*[\(\[](feat|ft|with)[^\)\]]*[\)\]]/i, ''));
+  const aFirst = a.split(' ')[0] || a;
+  let sc = 0;
+  if (/ - topic$/i.test(v.channel)) sc += 6;
+  if (/vevo/i.test(v.channel)) sc += 2;
+  if (c.includes(a) || (aFirst.length > 3 && c.includes(aFirst))) sc += 3;
+  if (s && t.includes(s)) sc += 4;
+  else if (s) { const w = s.split(' ').filter(x => x.length > 2); if (w.length && w.filter(x => t.includes(x)).length / w.length >= 0.6) sc += 2; else sc -= 15; }
+  if (t.includes(a)) sc += 1;
+  if (/official audio/.test(t)) sc += 3;
+  else if (/official (music )?video/.test(t)) sc += 2;
+  else if (/visuali[sz]er/.test(t)) sc += 1;
+  for (const b of BAD_WORDS) if (new RegExp('\\b' + b + '\\b').test(t) && !s.includes(b)) sc -= 5;
+  if (/\blyrics?\b/.test(t)) sc -= 1;
+  return sc;
+}
+
+const inflight = new Map();
+async function findVideos(artist, title) {
+  const k = norm(artist) + '|' + norm(title);
+  if (S.ytCache[k] && S.ytCache[k].length) return S.ytCache[k];
+  if (inflight.has(k)) return inflight.get(k);
+  const p = searchVideos(artist, title, k);
+  inflight.set(k, p);
+  try { return await p; } finally { inflight.delete(k); }
+}
+async function searchVideos(artist, title, k) {
+  const key = (S.settings.ytKey || '').trim();
+  if (!key) throw new UserError('Add your YouTube API key in Settings first.', { fatal: true });
+  const qs = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}`, key });
+  let res;
+  try { res = await fetch('https://www.googleapis.com/youtube/v3/search?' + qs); }
+  catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection.", { fatal: true }); }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new UserError(ytErr(res.status, data), { fatal: true });
+  const vids = (data.items || []).filter(it => it.id && it.id.videoId)
+    .map(it => ({ id: it.id.videoId, title: decode(it.snippet.title), channel: decode(it.snippet.channelTitle || '') }))
+    .map(v => ({ ...v, score: scoreVideo(v, artist, title) }))
+    .filter(v => v.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 5).map(v => v.id);
+  if (vids.length) {
+    S.ytCache[k] = vids;
+    const keys = Object.keys(S.ytCache);
+    if (keys.length > 600) keys.slice(0, 150).forEach(x => delete S.ytCache[x]);
+    saveSoon();
+  }
+  return vids;
+}
+
+/* ---------- player ---------- */
+let player = null, playerReady = null;
+function ensurePlayer() {
+  if (playerReady) return playerReady;
+  playerReady = new Promise((resolve, reject) => {
+    const to = setTimeout(() => { playerReady = null; reject(new Error('timeout')); }, 15000);
+    const make = () => {
+      player = new YT.Player('yt', {
+        width: '100%', height: '100%',
+        playerVars: { playsinline: 1, rel: 0, autoplay: 0, origin: location.origin },
+        events: { onReady: () => { clearTimeout(to); resolve(player); }, onStateChange: onYTState, onError: onYTError }
+      });
+    };
+    if (window.YT && window.YT.Player) make();
+    else {
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); make(); };
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api';
+      s.onerror = () => { clearTimeout(to); playerReady = null; reject(new Error('load')); };
+      document.head.appendChild(s);
+    }
+  });
+  return playerReady;
+}
+function onYTState(e) {
+  const st = e.data;
+  if (st === 1) { $('#tapHint').hidden = true; if (Eng.pending) { Eng.paused = false; setOnAir(true); renderNowOnly(); } }
+  else if (st === 2) { if (Eng.pending) { Eng.paused = true; setOnAir(false); renderNowOnly(); } }
+  else if (st === 0) { if (Eng.pending) Eng.pending.resolve('ended'); }
+}
+function onYTError() { if (Eng.pending) Eng.pending.resolve('error'); }
+
+function playVideo(id) {
+  return new Promise(resolve => {
+    if (Eng.pending) Eng.pending.resolve('aborted');
+    const p = { id, resolve: r => { if (Eng.pending === p) Eng.pending = null; clearTimeout(Eng.watch); resolve(r); } };
+    Eng.pending = p;
+    player.loadVideoById({ videoId: id });
+    try { player.setVolume(100); } catch (e) {}
+    clearTimeout(Eng.watch);
+    Eng.watch = setTimeout(() => {
+      try { const s = player.getPlayerState(); if (Eng.pending === p && s !== 1 && s !== 3) $('#tapHint').hidden = false; } catch (e) {}
+    }, 5000);
+  });
+}
+
+/* ---------- voices ---------- */
+function englishVoices() {
+  if (!('speechSynthesis' in window)) return [];
+  const vs = speechSynthesis.getVoices();
+  const en = vs.filter(v => /^en([-_]|$)/i.test(v.lang));
+  const list = en.length ? en : vs;
+  const rank = v => (/natural|neural|premium|enhanced/i.test(v.name) ? 0 : /google/i.test(v.name) ? 1 : 2);
+  return list.slice().sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+function voiceFor(h) {
+  const vs = englishVoices();
+  if (!vs.length || !h) return null;
+  if (h.voiceName) { const v = vs.find(x => x.name === h.voiceName); if (v) return v; }
+  const idx = Math.max(0, hosts().indexOf(h));
+  return vs[idx % vs.length];
+}
+function chunks(text) {
+  const parts = (String(text).match(/[^.!?]+[.!?]+["'”’)]*|[^.!?]+$/g) || [String(text)]).map(s => s.trim()).filter(Boolean);
+  const out = []; let cur = '';
+  for (const p of parts) {
+    if (cur && (cur + ' ' + p).length > 200) { out.push(cur); cur = p; }
+    else cur = (cur + ' ' + p).trim();
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+function speak(text, hostId, my) {
+  return new Promise(resolve => {
+    let done = false, t1 = null;
+    const finish = () => { if (done) return; done = true; clearTimeout(t1); if (Eng.cancelTalk === finish) Eng.cancelTalk = null; resolve(); };
+    Eng.cancelTalk = finish;
+    const h = hostById(hostId);
+    const useVoice = S.settings.voiceOn && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+    if (!useVoice) {
+      const words = String(text).split(/\s+/).length;
+      t1 = setTimeout(finish, Math.min(16000, 1600 + words * 280));
+      return;
+    }
+    const parts = chunks(text), v = voiceFor(h), rate = Number(h && h.rate) || 1, pitch = Number(h && h.pitch) || 1;
+    let idx = 0;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    const next = () => {
+      if (done) return;
+      if (my !== Eng.token || idx >= parts.length) return finish();
+      const u = new SpeechSynthesisUtterance(parts[idx++]);
+      if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
+      u.rate = rate; u.pitch = pitch;
+      u.onend = next;
+      u.onerror = finish;
+      try { speechSynthesis.speak(u); }
+      catch (e) { clearTimeout(t1); t1 = setTimeout(finish, Math.min(16000, 1600 + String(text).split(/\s+/).length * 280)); }
+    };
+    t1 = setTimeout(finish, 6000 + String(text).length * 110 / rate);
+    setTimeout(next, 60);
+  });
+}
+function unlockAudio() {
+  try { if ('speechSynthesis' in window && S.settings.voiceOn) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+}
+function previewHost(h) {
+  if (!('speechSynthesis' in window)) { toast("This browser can't read text out loud."); return; }
+  speechSynthesis.cancel();
+  const st = S.settings, v = voiceFor(h);
+  const u = new SpeechSynthesisUtterance(`What's good ${st.listener || 'Lune'}, it's ${h.name}, live on ${st.station || 'Lune FM'}.`);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = Number(h.rate) || 1; u.pitch = Number(h.pitch) || 1;
+  speechSynthesis.speak(u);
+}
+
+/* ---------- wake lock ---------- */
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && 'wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Eng.running) keepAwake(true); });
+
+/* ---------- show engine ---------- */
+function buildSegments(show) {
+  if (show.v !== 2) {
+    // shows made before the host crew existed
+    const a = anchorHost().id;
+    const segs = [{ kind: 'say', text: show.intro || `You're tuned in to ${S.settings.station}.`, host: a, label: 'Opening' }];
+    if (show.briefing && show.briefing.script) segs.push({ kind: 'say', text: show.briefing.script, host: a, label: 'The week in hip-hop' });
+    show.tracks.forEach((t, ti) => {
+      if (t.lead_in) segs.push({ kind: 'say', text: t.lead_in, host: a, label: 'On the mic', ti });
+      segs.push({ kind: 'track', ti });
+    });
+    if (show.outro) segs.push({ kind: 'say', text: show.outro, host: a, label: 'Sign-off' });
+    return segs;
+  }
+  const live = ids => ids.filter(id => hostById(id) && hostById(id).enabled);
+  const fallback = ids => { const l = live(ids || []); return l.length ? l : [anchorHost().id]; };
+  const maxFor = (n, many) => n > 1 ? many : 1;
+  const opening = fallback(show.opening);
+  const segs = [{ kind: 'talk', type: 'opening', hosts: opening, max: maxFor(opening.length, Math.min(4, opening.length + 1)), label: 'Opening' }];
+  if (show.briefing && show.briefing.script) segs.push({ kind: 'say', text: show.briefing.script, host: fallback([show.briefing.host])[0], label: 'The week in hip-hop' });
+  show.tracks.forEach((t, ti) => {
+    const mic = fallback(t.onMic || [t.pickedBy]);
+    segs.push({ kind: 'talk', type: 'leadin', ti, hosts: mic, max: maxFor(mic.length, 3), label: 'On the mic' });
+    segs.push({ kind: 'track', ti });
+    if (t.topicAfter && ti < show.tracks.length - 1) {
+      const th = fallback(t.topicAfter.hosts);
+      segs.push({ kind: 'talk', type: 'topic', topic: t.topicAfter.topic, hosts: th, max: maxFor(th.length, 6), label: 'Off topic' });
+    }
+  });
+  const so = fallback(show.signoff);
+  segs.push({ kind: 'talk', type: 'signoff', hosts: so, max: maxFor(so.length, 2), label: 'Sign-off' });
+  return segs;
+}
+
+async function resolveTrack(show, ti, my, silent) {
+  const t = show.tracks[ti];
+  if (!t) return false;
+  if (t.videoIds && t.videoIds.length) return true;
+  if (t.status === 'missing') return false;
+  try {
+    const ids = await findVideos(t.artist, t.title);
+    if (ids.length) { t.videoIds = ids; t.vi = 0; saveSoon(); return true; }
+    t.status = 'missing'; saveSoon(); if (!silent) renderAll();
+    return false;
+  } catch (e) {
+    if (silent) return false;
+    if (e.fatal) { stopRun(e.message); return false; }
+    t.status = 'missing'; saveSoon(); renderAll();
+    return false;
+  }
+}
+
+function notePlayed(t) {
+  const k = trackKey(t);
+  S.played = [{ k, artist: t.artist, title: t.title, at: Date.now() }, ...S.played.filter(p => p.k !== k)].slice(0, 300);
+}
+
+function logLine(show, l) {
+  if (!show.log) show.log = [];
+  show.log.push({ h: l.host, t: l.say });
+  if (show.log.length > 300) show.log.splice(0, show.log.length - 300);
+  Eng.lastLine = l;
+}
+
+function stopPoll() { clearInterval(Eng.poll); Eng.poll = null; }
+function startPrefetchPoll(show, segIndex) {
+  stopPoll();
+  Eng.poll = setInterval(() => {
+    try {
+      if (!player || !Eng.pending) return;
+      const d = player.getDuration(), c = player.getCurrentTime();
+      if (d > 0 && d - c < 15) { prefetchTalk(show, segIndex + 1); stopPoll(); }
+    } catch (e) {}
+  }, 2000);
+}
+function prefetchTalk(show, j) {
+  const seg = Eng.segs[j];
+  if (!seg || seg.kind !== 'talk' || seg.pre) return;
+  seg.pre = genLine(show, seg, j, seg.hosts[0], 0, []);
+}
+function invalidateNextTalk() {
+  const seg = Eng.segs[Eng.i + 1];
+  if (seg && seg.kind === 'talk') seg.pre = null;
+}
+
+async function playTrack(ti, my, segIndex) {
+  const show = Eng.show, t = show.tracks[ti];
+  if (!(await resolveTrack(show, ti, my))) return;
+  if (my !== Eng.token) return;
+  try { await ensurePlayer(); }
+  catch (e) { stopRun(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "YouTube's player didn't load. Check your connection, then tap Resume."); return; }
+  if (my !== Eng.token) return;
+  t.status = 'playing'; t.cut = false; notePlayed(t); save(); renderAll();
+  prefetchTrack(show, ti + 1);
+  startPrefetchPoll(show, segIndex);
+  for (let k = t.vi || 0; k < t.videoIds.length; k++) {
+    t.vi = k; saveSoon();
+    const r = await playVideo(t.videoIds[k]);
+    if (r === 'ended' || r === 'aborted') { stopPoll(); if (t.status === 'playing') t.status = 'played'; if (r === 'aborted') t.cut = true; save(); return; }
+  }
+  stopPoll();
+  t.status = 'missing'; t.vi = 0; save(); renderAll();
+}
+function prefetchTrack(show, ti) { if (show.tracks[ti]) resolveTrack(show, ti, null, true); }
+
+async function runTalk(show, seg, segIndex, my) {
+  seg.lines = [];
+  let pending = seg.pre || genLine(show, seg, segIndex, seg.hosts[0], 0, []);
+  seg.pre = null;
+  Eng.thinking = seg.hosts[0];
+  for (let turn = 0; turn < seg.max; turn++) {
+    renderAll();
+    let res = await pending;
+    if (my !== Eng.token) return;
+    Eng.thinking = null;
+    if (!res || res.error) {
+      if (res && res.error && res.error.fatal) { stopRun(res.error.message); return; }
+      if (turn === 0 && seg.type === 'leadin') {
+        const t = show.tracks[seg.ti];
+        res = { host: seg.hosts[0], say: `Here's ${t.title} by ${t.artist}.`, next: null };
+      } else break;
+    }
+    seg.lines.push(res);
+    logLine(show, res);
+    saveSoon();
+    Eng.speaker = res.host;
+    const last = turn + 1 >= seg.max || !res.next;
+    pending = last ? null : genLine(show, seg, segIndex, res.next, turn + 1, seg.lines.slice());
+    renderAll();
+    await speak(res.say, res.host, my);
+    if (my !== Eng.token) return;
+    Eng.speaker = null;
+    if (last) break;
+    Eng.thinking = res.next;
+  }
+  Eng.thinking = null; Eng.speaker = null;
+}
+
+async function runFrom(start) {
+  const my = ++Eng.token;
+  const show = Eng.show;
+  Eng.running = true; Eng.paused = false; Eng.error = null; show.done = false;
+  setOnAir(true); keepAwake(true);
+  for (let i = start; i < Eng.segs.length; i++) {
+    if (my !== Eng.token) return;
+    Eng.i = i; show.progress = i; saveSoon();
+    Eng.speaker = null; Eng.thinking = null; Eng.saying = null;
+    const seg = Eng.segs[i];
+    if (seg.kind !== 'track' && seg.ti != null) {
+      renderAll();
+      const ok = await resolveTrack(show, seg.ti, my);
+      if (my !== Eng.token) return;
+      if (!ok) { const j = Eng.segs.findIndex((s, k) => k > i && s.kind === 'track' && s.ti === seg.ti); if (j < 0) break; i = j; continue; }
+    }
+    renderAll();
+    if (seg.kind === 'talk') await runTalk(show, seg, i, my);
+    else if (seg.kind === 'say') {
+      Eng.speaker = seg.host; Eng.saying = { host: seg.host, say: seg.text };
+      logLine(show, Eng.saying); renderAll();
+      await speak(seg.text, seg.host, my);
+      Eng.speaker = null;
+    }
+    else await playTrack(seg.ti, my, i);
+  }
+  if (my !== Eng.token) return;
+  Eng.running = false; Eng.paused = false; show.done = true; show.progress = 0;
+  Eng.speaker = null; Eng.thinking = null;
+  setOnAir(false); keepAwake(false); save(); renderAll();
+  updateNotebooks(show);
+}
+
+function haltCurrent() {
+  Eng.token++;
+  stopPoll();
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (Eng.cancelTalk) Eng.cancelTalk();
+  if (Eng.pending) Eng.pending.resolve('aborted');
+  try { if (player && player.pauseVideo) player.pauseVideo(); } catch (e) {}
+  const seg = Eng.segs[Eng.i];
+  if (Eng.show && seg && seg.kind === 'track') { const t = Eng.show.tracks[seg.ti]; if (t && t.status === 'playing') { t.status = 'played'; t.cut = true; } }
+  Eng.speaker = null; Eng.thinking = null;
+  $('#tapHint').hidden = true;
+}
+function stopEverything() {
+  haltCurrent();
+  Eng.running = false; Eng.paused = false; Eng.show = null; Eng.segs = []; Eng.i = -1; Eng.error = null; Eng.lastLine = null;
+  setOnAir(false); keepAwake(false);
+}
+function stopRun(msg) {
+  haltCurrent();
+  Eng.paused = true; Eng.error = msg;
+  setOnAir(false); toast(msg, 6000); save(); renderAll();
+}
+
+function startOrToggle() {
+  const show = currentShow();
+  if (!show) return;
+  const active = Eng.show && Eng.show.id === show.id && Eng.running;
+  if (active && !Eng.paused) return pause();
+  if (active && Eng.paused) return resume();
+  unlockAudio();
+  if (show.done) { show.tracks.forEach(t => { if (t.status !== 'missing') t.status = 'queued'; t.cut = false; }); show.progress = 0; show.done = false; }
+  Eng.show = show; Eng.segs = buildSegments(show);
+  runFrom(Math.min(Math.max(0, show.progress || 0), Eng.segs.length - 1));
+}
+function pause() {
+  if (!Eng.running) return;
+  const seg = Eng.segs[Eng.i];
+  Eng.paused = true;
+  if (seg && seg.kind === 'track' && Eng.pending) { try { player.pauseVideo(); } catch (e) {} }
+  else { Eng.token++; try { speechSynthesis.cancel(); } catch (e) {} if (Eng.cancelTalk) Eng.cancelTalk(); Eng.speaker = null; Eng.thinking = null; }
+  setOnAir(false); renderAll();
+}
+function resume() {
+  const seg = Eng.segs[Eng.i];
+  unlockAudio();
+  Eng.error = null;
+  if (seg && seg.kind === 'track' && Eng.pending) { Eng.paused = false; try { player.playVideo(); } catch (e) {} setOnAir(true); renderAll(); }
+  else runFrom(Math.max(0, Eng.i));
+}
+function next() {
+  if (!Eng.running) return;
+  const i = Eng.i;
+  const wasTrack = Eng.segs[i] && Eng.segs[i].kind === 'track';
+  haltCurrent();
+  if (wasTrack) invalidateNextTalk();
+  runFrom(Math.min(i + 1, Eng.segs.length));
+}
+function jumpTo(ti) {
+  const show = currentShow();
+  if (!show) return;
+  if (!(Eng.show && Eng.show.id === show.id)) { stopEverything(); Eng.show = show; Eng.segs = buildSegments(show); }
+  const idx = Eng.segs.findIndex(s => s.ti === ti);
+  if (idx < 0) return;
+  const t = show.tracks[ti];
+  if (t.status === 'missing') { t.status = 'queued'; t.videoIds = null; t.vi = 0; }
+  haltCurrent(); unlockAudio();
+  runFrom(idx);
+}
+
+/* ---------- feedback ---------- */
+function setVerdict(t, v) {
+  const k = trackKey(t);
+  t.verdict = t.verdict === v ? null : v;
+  S.feedback = S.feedback.filter(f => f.k !== k);
+  if (t.verdict) S.feedback.unshift({ k, artist: t.artist, title: t.title, verdict: t.verdict, at: Date.now(), videoId: (t.videoIds && t.videoIds[t.vi || 0]) || null });
+  if (S.feedback.length > 500) S.feedback.length = 500;
+  save();
+  toast(({ love: 'Saved to Loved songs.', more: 'Noted. More like this next time.', skip: 'Got it. Less like this from now on.' })[t.verdict] || 'Cleared.');
+}
+
+/* ---------- rendering ---------- */
+function setOnAir(on) { $('#onair').classList.toggle('live', !!on); }
+function setTuning(on) { $('#dial').classList.toggle('tuning', !!on); }
+const ytmLink = t => {
+  const id = t.videoId || (t.videoIds && t.videoIds[t.vi || 0]);
+  return id ? `https://music.youtube.com/watch?v=${encodeURIComponent(id)}` : `https://music.youtube.com/search?q=${encodeURIComponent(t.artist + ' ' + t.title)}`;
+};
+const hc = id => { const h = hostById(id); return h ? h.color : 'var(--accent)'; };
+
+function renderHeader() {
+  const st = S.settings;
+  $('#stationName').textContent = st.station || 'Lune FM';
+  $('#freqNum').textContent = st.freq || '88.7';
+  const f = parseFloat(st.freq);
+  $('#needle').style.setProperty('--pos', String(Math.min(.98, Math.max(.02, ((isNaN(f) ? 88.7 : f) - 88) / 20))));
+  const now = new Date();
+  const part = partOfDay(now), who = st.listener || 'Lune';
+  $('#dateline').textContent = `${fmtDate(now.toISOString())}. ${part === 'late night' ? `Up late, ${who}.` : `Good ${part}, ${who}.`}`;
+  document.title = st.station || 'Lune FM';
+}
+
+function renderGen() {
+  $('#genSteps').innerHTML = Gen.steps.map(s => `<div class="step ${s.state}"><span class="dot"></span><span>${esc(s.label)}${s.state === 'fail' ? ', didn’t work' : ''}</span></div>`).join('');
+}
+
+function renderAll() {
+  renderHeader();
+  renderAir();
+  renderMini();
+  if (UI.view === 'history') renderHistory();
+}
+
+function showHostIds(show) {
+  if (show.v !== 2) return [anchorHost().id];
+  const ids = new Set([...(show.opening || []), ...(show.signoff || [])]);
+  show.tracks.forEach(t => (t.onMic || []).forEach(id => ids.add(id)));
+  if (show.briefing && show.briefing.host) ids.add(show.briefing.host);
+  return hosts().map(h => h.id).filter(id => ids.has(id));
+}
+
+function renderAir() {
+  const st = S.settings, show = currentShow();
+  $('#previewNote').hidden = !looksPreview;
+  $('#setupCard').hidden = !!(st.claudeKey.trim() && st.ytKey.trim());
+  $('#genPanel').hidden = !Gen.busy;
+  if (Gen.busy) renderGen();
+  const showVisible = !!show && UI.showOpen;
+  $('#emptyCard').hidden = showVisible || Gen.busy;
+  $('#showArea').hidden = !showVisible;
+  $('#makeBtn').disabled = Gen.busy;
+  $('#newShowBtn').disabled = Gen.busy;
+  if (!showVisible) {
+    $('#openLastBtn').hidden = !(show || S.shows[0]);
+    const names = activeHosts().map(h => h.name);
+    const crew = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] || 'Your host');
+    $('#emptyLede').textContent = `${crew} will pick today's songs${st.briefingOn ? ' and check the week in hip-hop' : ''}. It takes about a minute.`;
+    return;
+  }
+  const today = localDate(new Date());
+  $('#showDate').textContent = show.date === today ? `Today's show` : fmtDate(show.createdAt);
+  $('#showTitle').textContent = show.title || "Today's show";
+  renderNow(show);
+  renderBrief(show);
+  renderLineup(show);
+  const played = show.tracks.filter(t => t.status === 'played').length;
+  $('#showMeta').textContent = `${show.tracks.length} songs, ${played} played${show.cost ? `. Cost ${fmtCost(show.cost)}` : ''}`;
+}
+
+function renderNowOnly() { const s = currentShow(); if (s && UI.showOpen) renderNow(s); renderMini(); }
+
+const chipHTML = (id, on) => { const h = hostById(id); return h ? `<span class="hchip${on ? ' on' : ''}" style="--hc:${h.color}"><span class="hdot"></span>${esc(h.name)}</span>` : ''; };
+const lineHTML = (l, live, thinking) => `<div class="line${live ? ' is-live' : ''}${thinking ? ' thinking' : ''}" style="--hc:${hc(l.host)}"><span class="who">${esc(hostName(l.host))}</span><p>${esc(l.say)}</p></div>`;
+
+function renderNow(show) {
+  const st = S.settings;
+  const active = !!(Eng.show && Eng.show.id === show.id && Eng.running);
+  const seg = active && Eng.i >= 0 ? Eng.segs[Eng.i] : null;
+  const live = active && !Eng.paused;
+  let label = '', summary = '', track = null, upNext = false, video = false, verdicts = false, mic = false;
+  let studio = [], speaking = null, lines = null, topic = '';
+  if (active && Eng.error) { label = 'Paused'; summary = Eng.error; }
+  else if (!active) {
+    studio = showHostIds(show);
+    if (show.done) { label = "That's the show"; summary = 'Thanks for listening. Make a new show whenever you want more.'; }
+    else if (show.progress > 0) { label = 'Paused'; summary = 'Pick up right where you left off.'; }
+    else {
+      const breaks = show.tracks.filter(t => t.topicAfter).length;
+      label = 'Ready when you are';
+      summary = `${show.tracks.length} songs${show.briefing ? ', the week in hip-hop' : ''}${breaks ? `, ${breaks} topic break${breaks > 1 ? 's' : ''}` : ''}, and this crew on the mic.`;
+    }
+  } else if (seg && (seg.kind === 'talk' || seg.kind === 'say')) {
+    label = Eng.paused ? 'Paused' : seg.label; mic = live && !!Eng.speaker;
+    studio = seg.kind === 'talk' ? seg.hosts : [seg.host];
+    speaking = Eng.speaker || Eng.thinking;
+    if (seg.kind === 'talk') {
+      lines = (seg.lines || []).slice(-3).map((l, i, a) => lineHTML(l, i === a.length - 1 && !Eng.thinking, false));
+      if (Eng.thinking && live) lines.push(lineHTML({ host: Eng.thinking, say: '…' }, true, true));
+    } else lines = Eng.saying ? [lineHTML(Eng.saying, true, false)] : [];
+    if (seg.type === 'topic') topic = seg.topic;
+    if (seg.ti != null) { track = show.tracks[seg.ti]; upNext = true; }
+  } else if (seg && seg.kind === 'track') {
+    label = Eng.paused ? 'Paused' : 'Now playing'; track = show.tracks[seg.ti]; video = true; verdicts = true;
+  }
+  $('#nowLabel').textContent = label;
+  $('#micDot').classList.toggle('on', mic);
+  $('#studio').hidden = !studio.length;
+  $('#studio').innerHTML = studio.map(id => chipHTML(id, id === speaking)).join('');
+  $('#topicLine').hidden = !topic; $('#topicLine').textContent = topic;
+  $('#convo').hidden = !lines;
+  if (lines) $('#convo').innerHTML = lines.join('');
+  $('#talkText').hidden = !!lines || !summary; $('#talkText').textContent = summary;
+  $('#trackInfo').hidden = !track;
+  if (track) {
+    const pick = track.pickedBy ? `${hostName(track.pickedBy)}'s pick` : '';
+    $('#tUp').hidden = !(upNext || pick);
+    $('#tUp').textContent = upNext ? (pick ? `Up next · ${pick}` : 'Up next') : pick;
+    $('#tTitle').textContent = track.title;
+    $('#tArtist').textContent = track.artist;
+    $('#tWhy').textContent = track.why || ''; $('#tWhy').hidden = !track.why;
+    $('#tLink').href = ytmLink(track);
+  }
+  $('#videoBox').hidden = !video;
+  if (!video) $('#tapHint').hidden = true;
+  $('#verdicts').hidden = !verdicts;
+  if (verdicts) $$('#verdicts .chip').forEach(c => { const on = track.verdict === c.dataset.verdict; c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); });
+  const pb = $('#playBtn');
+  if (active) pb.innerHTML = live ? ICON.pause + 'Pause' : ICON.play + 'Resume';
+  else pb.innerHTML = ICON.play + (show.done ? 'Play it again' : show.progress > 0 ? 'Resume' : 'Start the show');
+  $('#nextBtn').disabled = !active;
+}
+
+function renderBrief(show) {
+  const b = show.briefing, box = $('#briefBox');
+  box.hidden = !b;
+  if (!b) return;
+  $('#briefCount').textContent = `${b.items.length} ${b.items.length === 1 ? 'story' : 'stories'}`;
+  $('#briefBy').textContent = b.host ? `Read by ${hostName(b.host)}` : '';
+  $('#briefBy').hidden = !b.host;
+  $('#briefList').innerHTML = b.items.map(it => `<li><span class="cat">${esc(it.category)}</span><span class="hl">${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.headline)}</a>` : esc(it.headline)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ''}</li>`).join('');
+}
+
+function renderLineup(show) {
+  const active = !!(Eng.show && Eng.show.id === show.id && Eng.running);
+  const seg = active ? Eng.segs[Eng.i] : null;
+  const cur = seg ? seg.ti : null;
+  $('#lineup').innerHTML = show.tracks.map((t, i) => {
+    const cls = ['row'];
+    if (cur === i) cls.push('is-now');
+    if (t.status === 'played' && cur !== i) cls.push('is-played');
+    if (t.status === 'missing') cls.push('is-missing');
+    const status = cur === i ? (seg.kind === 'track' ? 'Playing' : 'Up next') : t.status === 'missing' ? 'Not found' : '';
+    const pick = t.pickedBy ? ` · ${esc(hostName(t.pickedBy))}'s pick` : '';
+    return `<li class="${cls.join(' ')}" data-ti="${i}">
+      <span class="num">${pad2(i + 1)}</span>
+      <button class="row-main" data-act="jump" aria-label="Play ${esc(t.title)} by ${esc(t.artist)}"><span class="r-title">${esc(t.title)}</span><span class="r-artist">${esc(t.artist)}${pick}${status ? ` <span class="status">· ${status}</span>` : ''}</span></button>
+      <span class="tag${t.tag === 'new' ? ' new' : ''}">${esc(t.tag)}</span>
+      <button class="heart${t.verdict === 'love' ? ' on' : ''}" data-act="love" aria-label="Love ${esc(t.title)}" aria-pressed="${t.verdict === 'love'}">${ICON.heart}</button>
+    </li>`;
+  }).join('');
+}
+
+function renderMini() {
+  const show = Eng.show;
+  const vis = !!(show && Eng.running && UI.view !== 'air');
+  $('#mini').hidden = !vis;
+  document.body.classList.toggle('has-mini', vis);
+  if (!vis) return;
+  const seg = Eng.segs[Eng.i];
+  let txt = `${S.settings.station}`;
+  if (seg && seg.kind === 'track') { const t = show.tracks[seg.ti]; txt = `${t.title} · ${t.artist}`; }
+  else if (Eng.speaker || Eng.thinking) txt = `${hostName(Eng.speaker || Eng.thinking)} on the mic`;
+  else if (seg) txt = seg.label;
+  $('#miniTxt').textContent = (Eng.paused ? 'Paused: ' : '') + txt;
+  $('#miniPlay').textContent = Eng.paused ? 'Resume' : 'Pause';
+}
+
+function renderHistory() {
+  $$('#histSeg button').forEach(b => { const on = b.dataset.h === UI.histTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+  const el = $('#histList');
+  if (UI.histTab === 'shows') {
+    if (!S.shows.length) { el.innerHTML = '<p class="lede">Your shows will collect here, with their songs, the news, and what you loved.</p>'; return; }
+    el.innerHTML = '<div class="hist">' + S.shows.map(s => {
+      const played = s.tracks.filter(t => t.status === 'played').length;
+      return `<details class="hshow"><summary><span class="h-title">${esc(s.title || 'Show')}</span><span class="h-meta">${esc(fmtDate(s.createdAt))} · ${s.tracks.length} songs · ${played} played${s.cost ? ` · ${fmtCost(s.cost)}` : ''}</span></summary>
+        <ul class="htracks">${s.tracks.map(t => `<li><span class="tt">${t.verdict === 'love' ? '<span style="color:var(--live)">♥</span> ' : ''}${esc(t.title)} <span class="muted">· ${esc(t.artist)}${t.pickedBy ? ` · ${esc(hostName(t.pickedBy))}` : ''}</span></span><a class="ytm" href="${esc(ytmLink(t))}" target="_blank" rel="noopener">YouTube Music</a></li>`).join('')}</ul>
+        <button class="btn small" data-open="${esc(s.id)}">Open this show</button></details>`;
+    }).join('') + '</div>';
+  } else {
+    const loved = S.feedback.filter(f => f.verdict === 'love' || f.verdict === 'more');
+    if (!loved.length) { el.innerHTML = '<p class="lede">Tap the heart or Love it on a song and it lands here, with a link to add it in YouTube Music.</p>'; return; }
+    el.innerHTML = '<ul class="htracks loved">' + loved.map(f => `<li data-k="${esc(f.k)}"><span class="tt">${esc(f.title)} <span class="muted">· ${esc(f.artist)}${f.verdict === 'more' ? ' · wanted more like it' : ''}</span></span><span class="btnrow" style="flex-wrap:nowrap;gap:12px"><a class="ytm" href="${esc(ytmLink(f))}" target="_blank" rel="noopener">YouTube Music</a><button class="btn small ghost" data-unlove="${esc(f.k)}">Remove</button></span></li>`).join('') + '</ul>';
+  }
+}
+
+/* ---------- navigation ---------- */
+function go(view) {
+  UI.view = view;
+  $('#view-air').hidden = view !== 'air';
+  $('#view-history').hidden = view !== 'history';
+  $('#view-settings').hidden = view !== 'settings';
+  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
+  if (view === 'history') renderHistory();
+  if (view === 'settings') fillSettings();
+  renderMini();
+  window.scrollTo(0, 0);
+}
+
+/* ---------- settings ---------- */
+const FIELDS = ['claudeKey', 'ytKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'trackCount', 'mix', 'briefingOn', 'briefFocus', 'topics', 'topicBreaks', 'houseRules', 'voiceOn', 'directorModel'];
+const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
+function fillSettings() {
+  for (const f of FIELDS) {
+    const el = $('#s-' + f); if (!el) continue;
+    if (el.type === 'checkbox') el.checked = !!S.settings[f];
+    else el.value = S.settings[f] ?? '';
+  }
+  $('#originCode').textContent = (location.origin && location.origin !== 'null' ? location.origin : 'https://your-name.github.io') + '/*';
+  if (!(S.settings.claudeKey && S.settings.ytKey)) $('#guide').open = true;
+  renderHostsEditor();
+}
+function onSettingInput(e) {
+  const el = e.target;
+  if (el.closest('#hostsEd')) return;
+  const f = el.id && el.id.replace(/^s-/, '');
+  if (!FIELDS.includes(f)) return;
+  let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (f === 'trackCount' || f === 'topicBreaks') v = Number(v);
+  if (f === 'claudeKey' || f === 'ytKey') v = String(v).trim();
+  S.settings[f] = v;
+  saveSoon(); renderHeader();
+  if (f === 'claudeKey' || f === 'ytKey' || f === 'briefingOn') renderAir();
+}
+
+const fmtX = v => `${Number(v || 1).toFixed(2).replace(/0$/, '')}x`;
+function hostMeta(h) {
+  const bits = [modelName(h.model || HAIKU).replace(' 5.5', '')];
+  if (S.settings.newsHost === h.id) bits.push('news');
+  if (!h.enabled) bits.push('off');
+  return bits.join(' · ');
+}
+function renderHostsEditor() {
+  const ed = $('#hostsEd'); if (!ed) return;
+  const openIds = new Set($$('#hostsEd details[open]').map(d => d.dataset.hid));
+  const vs = englishVoices();
+  ed.innerHTML = hosts().map(h => {
+    const id = esc(h.id), p = `h-${id}-`;
+    const voiceOpts = '<option value="">Automatic</option>' + vs.map(v => `<option value="${esc(v.name)}"${v.name === h.voiceName ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    const modelOpts = MODEL_OPTS.map(([v, n]) => `<option value="${v}"${(h.model || HAIKU) === v ? ' selected' : ''}>${n}</option>`).join('');
+    const nb = (h.notebook || []).length ? `<ul>${h.notebook.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '<p class="note" style="margin-top:6px">Empty until after ' + esc(h.name) + "'s first show.</p>";
+    return `<details class="hostcard${h.enabled ? '' : ' off'}" data-hid="${id}"${openIds.has(h.id) ? ' open' : ''}>
+      <summary><span class="hdot" style="--hc:${esc(h.color)}"></span><span class="hname">${esc(h.name)}</span><span class="hmeta">${esc(hostMeta(h))}</span></summary>
+      <div class="hostbody">
+        <div class="two">
+          <label class="f" for="${p}name">Name<input type="text" id="${p}name" data-hf="name" value="${esc(h.name)}"></label>
+          <label class="f" for="${p}model">Model<select id="${p}model" data-hf="model">${modelOpts}</select></label>
+        </div>
+        <label class="f" for="${p}personality">Personality and music lane<textarea id="${p}personality" data-hf="personality">${esc(h.personality)}</textarea></label>
+        <label class="f" for="${p}voiceName">Voice<select id="${p}voiceName" data-hf="voiceName">${voiceOpts}</select></label>
+        <div class="two">
+          <label class="f" for="${p}pitch">Pitch <span class="muted" data-out="pitch">${fmtX(h.pitch)}</span><input type="range" id="${p}pitch" data-hf="pitch" min="0.6" max="1.5" step="0.05" value="${Number(h.pitch) || 1}"></label>
+          <label class="f" for="${p}rate">Speed <span class="muted" data-out="rate">${fmtX(h.rate)}</span><input type="range" id="${p}rate" data-hf="rate" min="0.8" max="1.3" step="0.05" value="${Number(h.rate) || 1}"></label>
+        </div>
+        <label class="switch" for="${p}enabled">On the roster<input type="checkbox" id="${p}enabled" data-hf="enabled"${h.enabled ? ' checked' : ''}></label>
+        <label class="switch" for="${p}news">Reads the news<input type="radio" name="newsHost" id="${p}news" data-hf="news"${S.settings.newsHost === h.id ? ' checked' : ''}></label>
+        <div class="notebook"><span class="eyebrow">${esc(h.name)}'s notebook</span>${nb}</div>
+        <div class="btnrow">
+          <button type="button" class="btn small" data-hact="hear">Hear ${esc(h.name)}</button>
+          <button type="button" class="btn small ghost" data-hact="clearnb" id="${p}clearnb">Clear notebook</button>
+          <button type="button" class="btn small ghost" data-hact="remove" id="${p}remove">Remove</button>
+        </div>
+      </div>
+    </details>`;
+  }).join('');
+}
+function onHostInput(e) {
+  const el = e.target, f = el.dataset.hf; if (!f) return;
+  const card = el.closest('[data-hid]'); const h = card && hostById(card.dataset.hid); if (!h) return;
+  if (f === 'news') { if (el.checked) S.settings.newsHost = h.id; }
+  else if (f === 'enabled') {
+    if (!el.checked && activeHosts().length <= 1) { el.checked = true; toast('Keep at least one host on the roster.'); return; }
+    h.enabled = el.checked; card.classList.toggle('off', !h.enabled);
+  }
+  else if (f === 'pitch' || f === 'rate') { h[f] = Number(el.value); const o = card.querySelector(`[data-out="${f}"]`); if (o) o.textContent = fmtX(el.value); }
+  else h[f] = el.value;
+  if (f === 'name') card.querySelector('.hname').textContent = el.value || 'Unnamed host';
+  $$('#hostsEd .hostcard').forEach(c => { const x = hostById(c.dataset.hid); if (x) c.querySelector('.hmeta').textContent = hostMeta(x); });
+  saveSoon();
+}
+
+async function testKeys() {
+  const out = $('#testOut');
+  const line = (ok, msg) => `<span class="${ok ? 'ok' : 'bad'}">${ok ? 'Working' : 'Problem'}: ${esc(msg)}</span>`;
+  $('#testBtn').disabled = true;
+  out.innerHTML = '<span class="muted">Testing your keys...</span>';
+  const res = [];
+  const models = [...new Set([S.settings.directorModel, ...activeHosts().map(h => h.model || HAIKU)])];
+  for (const m of models) {
+    try { await callClaude({ system: 'Reply with the single word OK.', user: 'Say OK.', maxTokens: 5, model: m }); res.push(line(true, `Claude key with ${modelName(m)}`)); }
+    catch (e) { res.push(line(false, `${modelName(m)}: ${e.message}`)); }
+  }
+  try {
+    const key = (S.settings.ytKey || '').trim();
+    if (!key) throw new UserError('Add your YouTube API key first.');
+    const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '1', q: 'Lucky Daye Roll Some Mo', key }));
+    const d = await r.json().catch(() => null);
+    if (!r.ok) throw new UserError(ytErr(r.status, d));
+    res.push(line(true, 'YouTube key'));
+  } catch (e) { res.push(line(false, e.message || "Couldn't reach YouTube.")); }
+  out.innerHTML = res.join('');
+  $('#testBtn').disabled = false;
+}
+
+/* ---------- data ---------- */
+function exportData() {
+  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '' } };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `lune-fm-backup-${localDate(new Date())}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Backup saved to your downloads.');
+}
+function importData(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d || !Array.isArray(d.shows) || !d.settings) throw new Error('shape');
+      stopEverything();
+      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey };
+      localStorage.setItem(LS_KEY, JSON.stringify({ ...d, settings: { ...d.settings, ...keep } }));
+      S = loadState();
+      save(); fillSettings(); renderAll();
+      toast('Backup restored.');
+    } catch (e) { toast("That file isn't a Lune FM backup."); }
+  };
+  r.readAsText(file);
+}
+function armed(id, label, ms = 3500) {
+  if (UI.armed[id]) { clearTimeout(UI.armed[id].t); delete UI.armed[id]; return true; }
+  const btn = $('#' + id), orig = btn.textContent;
+  btn.textContent = label;
+  UI.armed[id] = { t: setTimeout(() => { btn.textContent = orig; delete UI.armed[id]; }, ms) };
+  return false;
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const goEl = e.target.closest('[data-go]');
+  if (goEl) { go(goEl.dataset.go); return; }
+  const tab = e.target.closest('.tab');
+  if (tab) { go(tab.dataset.view); return; }
+});
+$('#makeBtn').addEventListener('click', makeShow);
+$('#newShowBtn').addEventListener('click', () => {
+  const show = currentShow();
+  const inProgress = show && !show.done && (show.progress > 0 || (Eng.running && Eng.show === show));
+  if (inProgress && !armed('newShowBtn', 'Tap again to make a new show')) return;
+  $('#newShowBtn').textContent = 'Make a new show';
+  makeShow();
+});
+$('#openLastBtn').addEventListener('click', () => {
+  if (!currentShow() && S.shows[0]) S.currentShowId = S.shows[0].id;
+  UI.showOpen = true; save(); renderAll();
+});
+$('#playBtn').addEventListener('click', startOrToggle);
+$('#nextBtn').addEventListener('click', next);
+$('#miniPlay').addEventListener('click', startOrToggle);
+$('#verdicts').addEventListener('click', e => {
+  const c = e.target.closest('[data-verdict]'); if (!c || !Eng.show) return;
+  const seg = Eng.segs[Eng.i]; if (!seg || seg.ti == null) return;
+  const t = Eng.show.tracks[seg.ti];
+  setVerdict(t, c.dataset.verdict);
+  invalidateNextTalk();
+  if (t.verdict === 'skip') next(); else renderAll();
+});
+$('#lineup').addEventListener('click', e => {
+  const btn = e.target.closest('[data-act]'); if (!btn) return;
+  const ti = Number(btn.closest('[data-ti]').dataset.ti);
+  const show = currentShow(); if (!show) return;
+  if (btn.dataset.act === 'love') { setVerdict(show.tracks[ti], 'love'); if (Eng.segs[Eng.i] && Eng.segs[Eng.i].ti === ti) invalidateNextTalk(); renderAll(); }
+  else jumpTo(ti);
+});
+$('#histSeg').addEventListener('click', e => { const b = e.target.closest('[data-h]'); if (!b) return; UI.histTab = b.dataset.h; renderHistory(); });
+$('#histList').addEventListener('click', e => {
+  const open = e.target.closest('[data-open]');
+  if (open) { stopEverything(); S.currentShowId = open.dataset.open; UI.showOpen = true; save(); go('air'); renderAll(); return; }
+  const un = e.target.closest('[data-unlove]');
+  if (un) {
+    const k = un.dataset.unlove;
+    S.feedback = S.feedback.filter(f => f.k !== k);
+    S.shows.forEach(s => s.tracks.forEach(t => { if (trackKey(t) === k && (t.verdict === 'love' || t.verdict === 'more')) t.verdict = null; }));
+    save(); renderHistory();
+  }
+});
+$('#settingsForm').addEventListener('input', onSettingInput);
+$('#settingsForm').addEventListener('change', onSettingInput);
+$('#settingsForm').addEventListener('submit', e => e.preventDefault());
+$('#hostsEd').addEventListener('input', onHostInput);
+$('#hostsEd').addEventListener('change', onHostInput);
+$('#hostsEd').addEventListener('click', e => {
+  const b = e.target.closest('[data-hact]'); if (!b) return;
+  const card = b.closest('[data-hid]'); const h = card && hostById(card.dataset.hid); if (!h) return;
+  if (b.dataset.hact === 'hear') previewHost(h);
+  else if (b.dataset.hact === 'clearnb') {
+    if (!armed(b.id, 'Tap again to clear')) return;
+    h.notebook = []; save(); renderHostsEditor(); toast(`${h.name}'s notebook is cleared.`);
+  } else if (b.dataset.hact === 'remove') {
+    if (hosts().length <= 1 || (h.enabled && activeHosts().length <= 1)) { toast('Keep at least one host on the roster.'); return; }
+    if (!armed(b.id, `Tap again to remove ${h.name}`)) return;
+    S.settings.hosts = hosts().filter(x => x.id !== h.id);
+    if (S.settings.newsHost === h.id) S.settings.newsHost = anchorHost().id;
+    save(); renderHostsEditor(); toast(`${h.name} left the station.`);
+  }
+});
+$('#addHost').addEventListener('click', () => {
+  if (hosts().length >= 8) { toast('Eight hosts is the max.'); return; }
+  const used = new Set(hosts().map(h => h.color));
+  const color = HOST_COLORS.find(c => !used.has(c)) || HOST_COLORS[hosts().length % HOST_COLORS.length];
+  const h = { id: 'h' + Date.now().toString(36), name: 'New host', color, model: HAIKU, enabled: true, voiceName: '', pitch: 1, rate: 1, notebook: [],
+    personality: 'Describe who this host is, how they talk, and their music lane.' };
+  hosts().push(h); save(); renderHostsEditor();
+  const card = $(`#hostsEd [data-hid="${h.id}"]`); if (card) { card.open = true; card.scrollIntoView({ block: 'center' }); }
+});
+$$('[data-reveal]').forEach(b => b.addEventListener('click', () => {
+  const inp = $('#' + b.dataset.reveal); const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password'; b.textContent = show ? 'Hide' : 'Show';
+}));
+$('#testBtn').addEventListener('click', testKeys);
+$('#exportBtn').addEventListener('click', exportData);
+$('#importBtn').addEventListener('click', () => $('#importFile').click());
+$('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
+$('#clearBtn').addEventListener('click', () => {
+  if (!armed('clearBtn', 'Tap again to clear everything')) return;
+  $('#clearBtn').textContent = 'Clear history';
+  stopEverything();
+  S = { ...freshState(), settings: S.settings };
+  UI.showOpen = false; save(); renderAll();
+  toast('History cleared. Your settings, hosts and keys stayed.');
+});
+if ('speechSynthesis' in window) {
+  const onVoices = () => { if (UI.view === 'settings' && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#hostsEd'))) renderHostsEditor(); };
+  if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', onVoices);
+  else speechSynthesis.onvoiceschanged = onVoices;
+}
+window.addEventListener('pagehide', save);
+
+/* ---------- boot ---------- */
+S.shows.forEach(s => s.tracks.forEach(t => { if (t.status === 'playing') t.status = 'played'; }));
+if (!currentShow() && S.shows[0]) S.currentShowId = S.shows[0].id;
+const cs = currentShow();
+UI.showOpen = !!(cs && cs.date === localDate(new Date()));
+fillSettings();
+go('air');
+renderAll();
+
+// Test hooks (no effect on the app)
+window.__lunefm = { extractJSON, scoreVideo, chunks, cleanHost, buildSegments, norm, parseLine, lineContext, hostSystem, state: () => S, Eng };
+})();
+</script>
+</body>
+</html>
