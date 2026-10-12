@@ -504,6 +504,10 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
           </select>
           <small>Picks a few songs at a time while the station plays. Real songs matter most here, so it starts on Sonnet. The On air page shows what today has cost.</small>
         </label>
+        <div class="btnrow">
+          <button type="button" class="btn small" id="diagBtn">Copy problem report</button>
+        </div>
+        <small class="muted" id="diagOut" style="display:block;white-space:pre-wrap;overflow-wrap:anywhere;user-select:text">If something goes wrong, tap this and paste it to Claude. It shows what the AI sent back. It never includes your keys.</small>
       </fieldset>
 
       <fieldset>
@@ -754,13 +758,39 @@ function claudeErr(status, data) {
 }
 const isFatalClaude = (status, msg) => status === 401 || status === 403 || /credit balance|spend|usage limit/i.test(msg || '');
 
-async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
+/* The 5.5 models think before they answer unless told otherwise, and that thinking
+   counts against max_tokens. Radio needs quick, short replies, so each job says how
+   hard to think. If Anthropic ever refuses these settings, the station drops them
+   for that model and carries on. */
+const Tune = { refused: {} };
+function tuneFor(model, effort) {
+  if (Tune.refused[model]) return null;
+  if (model === HAIKU) return { output_config: { effort }, thinking: { type: 'disabled' } };
+  if (model === 'claude-sonnet-5-5') return { output_config: { effort }, thinking: { type: 'between_tools' } };
+  if (model === 'claude-opus-5-5') return { output_config: { effort } };
+  return null;
+}
+const isTuneRefusal = (status, msg) => status === 400 && /thinking|effort|output_config|between_tools/i.test(msg || '');
+
+/* a small record of replies that went wrong, so Lune can copy it from Settings */
+const Diag = { fails: [] };
+function noteFail(what, r, err) {
+  Diag.fails.unshift({
+    when: new Date().toISOString(), what, model: r && r.model, stop: r && r.stop,
+    tuned: r ? r.tuned : null, error: err ? String(err.message || err) : '',
+    reply: r ? String(r.text || '').slice(0, 700) : ''
+  });
+  Diag.fails = Diag.fails.slice(0, 6);
+}
+
+async function callClaude({ system, user, tools, maxTokens = 3000, model, effort = 'low', _retry = 0 }) {
   const key = (S.settings.claudeKey || '').trim();
   if (!key) throw new UserError('Add your Claude API key in Settings first.', { fatal: true });
   model = model || S.settings.directorModel;
   const first = { role: 'user', content: user };
   const blocks = [];
   const usage = { input: 0, output: 0, searches: 0 };
+  let stop = '', tune = tuneFor(model, effort);
   for (let round = 0; round < 4; round++) {
     const messages = [first];
     if (round > 0) {
@@ -770,6 +800,7 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
     }
     const body = { model, max_tokens: maxTokens, system, messages };
     if (tools) body.tools = tools;
+    if (tune) Object.assign(body, tune);
     let res;
     try {
       res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -788,6 +819,10 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
     const data = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = (data && data.error && data.error.message) || '';
+      if (tune && round === 0 && isTuneRefusal(res.status, msg)) {
+        // Anthropic didn't accept the speed settings for this model: drop them and ask again
+        Tune.refused[model] = msg || true; tune = null; round--; continue;
+      }
       throw new UserError(claudeErr(res.status, data), { fatal: isFatalClaude(res.status, msg) });
     }
     const u = data.usage || {};
@@ -795,7 +830,8 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
     usage.output += u.output_tokens || 0;
     usage.searches += (u.server_tool_use && u.server_tool_use.web_search_requests) || 0;
     blocks.push(...(data.content || []));
-    if (data.stop_reason !== 'pause_turn') break;
+    stop = data.stop_reason || '';
+    if (stop !== 'pause_turn') break;
   }
   const lastTool = blocks.map(b => b.type).lastIndexOf('web_search_tool_result');
   const text = blocks.slice(lastTool + 1).filter(b => b.type === 'text').map(b => b.text).join('');
@@ -807,17 +843,64 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
   const [pi, po] = PRICES[model] || [2, 10];
   const cost = usage.input * pi / 1e6 + usage.output * po / 1e6 + usage.searches * SEARCH_PRICE;
   addSpend(cost);
-  return { text, urls, usage, cost };
+  if (stop === 'max_tokens' && !tools && !_retry && !hasWholeJSON(text)) {
+    // the reply ran out of room before it finished: ask once more with a lot more room
+    const again = await callClaude({ system, user, tools, maxTokens: Math.min(maxTokens * 4, 16000), model, effort, _retry: 1 });
+    again.cost += cost;
+    return again;
+  }
+  return { text, urls, usage, cost, stop, model, tuned: !!tune };
 }
 
+/* Pull the JSON object out of a reply. Reads past any words or code fences around it,
+   and if the reply got cut off partway, keeps every item that was finished. */
+function scanJSON(t, start) {
+  const closers = [];
+  let inStr = false, escp = false, safeEnd = -1, safeStack = null;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) { if (escp) escp = false; else if (c === '\\') escp = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true;
+    else if (c === '{' || c === '[') closers.push(c === '{' ? '}' : ']');
+    else if (c === '}' || c === ']') {
+      closers.pop();
+      if (!closers.length) return { whole: t.slice(start, i + 1) };
+      safeEnd = i + 1; safeStack = closers.slice();
+    }
+  }
+  if (safeEnd < 0) return {};
+  return { patched: t.slice(start, safeEnd) + safeStack.reverse().join('') };
+}
+const dropTrailingCommas = s => s.replace(/,(\s*[}\]])/g, '$1');
+function tryParse(s) {
+  try { return JSON.parse(s); } catch (e) {}
+  try { return JSON.parse(dropTrailingCommas(s)); } catch (e) {}
+  return undefined;
+}
+function hasWholeJSON(text) {
+  const t = String(text || ''), a = t.indexOf('{');
+  return a >= 0 && !!scanJSON(t, a).whole;
+}
 function extractJSON(text) {
-  let t = String(text || '').trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fence) t = fence[1];
-  const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a < 0 || b <= a) throw new UserError("The reply came back in the wrong shape.");
-  try { return JSON.parse(t.slice(a, b + 1)); }
-  catch (e) { throw new UserError("The reply came back in the wrong shape."); }
+  const t = String(text || '');
+  const fence = t.match(/```(?:json)?\s*(\{[\s\S]*?)```/i);
+  const tries = fence ? [fence[1], t] : [t];
+  let patched;
+  for (const src of tries) {
+    // only whole top-level objects count, so a broken reply never turns into one of its own songs
+    for (let a = src.indexOf('{'), n = 0; a >= 0 && n < 4; n++) {
+      const s = scanJSON(src, a);
+      if (s.whole) {
+        const d = tryParse(s.whole); if (d && typeof d === 'object') return d;
+        a = src.indexOf('{', a + s.whole.length);
+      } else {
+        if (s.patched && patched === undefined) patched = tryParse(s.patched);
+        break;
+      }
+    }
+  }
+  if (patched && typeof patched === 'object') return patched;
+  throw new UserError(t.trim() ? 'The reply came back in the wrong shape.' : 'The reply came back empty.');
 }
 
 /* ---------- song picking (program director) ---------- */
@@ -843,6 +926,24 @@ function knownSongs() {
     seen.add(k); out.push(fmtT(p));
   });
   return out.slice(0, 80);
+}
+
+/* last resort when the JSON is broken: pull out each artist and title pair the reply did name */
+function salvageSongs(text) {
+  const songs = [], re = /"artist"\s*:\s*"([^"\n]{1,80})"\s*,\s*"title"\s*:\s*"([^"\n]{1,120})"/g;
+  let m;
+  while ((m = re.exec(String(text || '')))) {
+    const rest = text.slice(re.lastIndex, re.lastIndex + 400);
+    const tag = (rest.match(/"tag"\s*:\s*"([^"\n]*)"/) || [])[1] || 'new';
+    const by = (rest.match(/"picked_by"\s*:\s*"([^"\n]*)"/) || [])[1] || '';
+    songs.push({ artist: m[1], title: m[2], tag, why: '', picked_by: by });
+  }
+  return { songs, topic: '' };
+}
+function songErr(r, e) {
+  if (r && r.stop === 'max_tokens') return new UserError("The song picker's reply got cut off. Trying again.");
+  if (r && r.stop === 'refusal') return new UserError("The song picker wouldn't answer that one. Trying again.");
+  return new UserError((e && e.message) || "The song picker's reply had no songs in it.");
 }
 
 async function planSet(block, n, opts = {}) {
@@ -877,14 +978,17 @@ async function planSet(block, n, opts = {}) {
   if (opts.request) lines.push('', `${L()} called the request line asking for: "${opts.request}". The first song must answer that request. If they named a song, play that exact song.`);
   lines.push('',
     `Pick the next ${n} songs.`,
-    'Reply with only a JSON object, no other text, in this shape:',
+    'Reply with only a JSON object, no other text before or after it, in this shape. Use single quotes, never double quotes, inside the values:',
     '{"songs": [{"artist": "main artist", "title": "exact song title", "tag": "new or favorite or deep cut or throwback", "why": "one short line for the screen, under 14 words", "picked_by": "host name"}],',
     ` "topic": "one specific, funny angle for a quick topic break, drawn from these topics: ${st.topics}. Fit it to the hosts on this show."}`,
     `"new" means an artist or song ${L()} probably has not heard yet. "favorite" means a song by an artist ${L()} loves. "deep cut" means a lesser-known song by an artist ${L()} already knows. "throwback" means an older classic.`
   );
-  const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 300 + n * 140, model: st.directorModel });
-  const d = extractJSON(r.text);
+  const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 2500 + n * 300, model: st.directorModel, effort: 'low' });
+  let d;
+  try { d = extractJSON(r.text); }
+  catch (e) { d = salvageSongs(r.text); if (!d.songs.length) { noteFail('Song picker', r, e); throw songErr(r, e); } }
   const songs = Array.isArray(d.songs) ? d.songs : [];
+  if (!songs.length) { noteFail('Song picker', r, 'no songs in the reply'); throw songErr(r); }
   const recent = new Set(S.played.slice(0, 150).map(p => p.k));
   const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
   const taken = new Set((opts.exclude || []).map(trackKey));
@@ -925,10 +1029,11 @@ async function genBriefing() {
     '{"script": "the spoken segment, 90 to 150 words. Open with a quick line into the news. Do not introduce the next song, someone else does that.", "items": [{"category": "music or shows or film and tv or fashion or culture", "headline": "under 12 words", "detail": "one sentence", "url": "the source link from your search results"}]}',
     'Include 3 to 6 items.'
   ].join('\n');
-  const r = await callClaude({ system, user, maxTokens: 2000, model: st.directorModel, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }] });
-  const d = extractJSON(r.text);
+  const r = await callClaude({ system, user, maxTokens: 8000, model: st.directorModel, effort: 'medium', tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }] });
+  let d;
+  try { d = extractJSON(r.text); } catch (e) { noteFail('Daily briefing', r, e); throw e; }
   const script = cleanHost(d.script);
-  if (!script) throw new UserError('The news came back empty.');
+  if (!script) { noteFail('Daily briefing', r, 'no script'); throw new UserError('The news came back empty.'); }
   const items = (Array.isArray(d.items) ? d.items : []).filter(i => i && i.headline).slice(0, 6).map(i => {
     const url = typeof i.url === 'string' && /^https?:\/\//i.test(i.url) && (r.urls.size === 0 || r.urls.has(urlKey(i.url))) ? i.url : '';
     return { category: String(i.category || 'news').toLowerCase(), headline: cleanHost(i.headline), detail: cleanHost(i.detail), url };
@@ -1038,9 +1143,9 @@ function parseLine(text, h) {
 
 async function genTurn(hostId, job) {
   const h = hostById(hostId) || anchorHost();
-  const r = await callClaude({ system: hostSystem(h), user: turnPrompt(h, job), maxTokens: 200, model: h.model || HAIKU });
+  const r = await callClaude({ system: hostSystem(h), user: turnPrompt(h, job), maxTokens: 1500, model: h.model || HAIKU, effort: 'low' });
   const { say, next } = parseLine(r.text, h);
-  if (!say) throw new UserError('empty');
+  if (!say) { noteFail(`${h.name}'s line`, r, 'empty line'); throw new UserError('empty'); }
   return { host: h.id, say, next: nameToId(next), cost: r.cost };
 }
 
@@ -1067,7 +1172,7 @@ async function updateNotebooks(session) {
       'Reply with only JSON: {"notebook": ["note", "note"]}'
     ].join('\n');
     try {
-      const r = await callClaude({ system: `You are ${h.name}, a host on ${st.station}. Who you are: ${h.personality}`, user, maxTokens: 500, model: h.model || HAIKU });
+      const r = await callClaude({ system: `You are ${h.name}, a host on ${st.station}. Who you are: ${h.personality}`, user, maxTokens: 2500, model: h.model || HAIKU, effort: 'low' });
       const d = extractJSON(r.text);
       if (Array.isArray(d.notebook)) h.notebook = d.notebook.map(cleanHost).filter(Boolean).slice(0, 8);
       session.cost = (session.cost || 0) + r.cost;
@@ -2320,7 +2425,10 @@ async function testKeys() {
   const res = [];
   const models = [...new Set([S.settings.directorModel, ...activeHosts().map(h => h.model || HAIKU)])];
   for (const m of models) {
-    try { await callClaude({ system: 'Reply with the single word OK.', user: 'Say OK.', maxTokens: 5, model: m }); res.push(line(true, `Claude key with ${modelName(m)}`)); }
+    try {
+      await callClaude({ system: 'Reply with the single word OK.', user: 'Say OK.', maxTokens: 16, model: m, effort: 'low', _retry: 1 });
+      res.push(line(true, `Claude key with ${modelName(m)}${Tune.refused[m] ? ' (in slower mode, Claude refused the speed settings)' : ''}`));
+    }
     catch (e) { res.push(line(false, `${modelName(m)}: ${e.message}`)); }
   }
   try {
@@ -2453,6 +2561,30 @@ async function makeSyncLink() {
 }
 function loadScript(src) {
   return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+}
+function diagReport() {
+  const st = S.settings;
+  return JSON.stringify({
+    app: 'Lune FM v3.1', at: new Date().toISOString(), browser: navigator.userAgent,
+    songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
+    voices: voiceMode(), speedSettingsRefused: Tune.refused,
+    onAir: !!Eng.on, upcoming: Eng.upcoming.length, ytLookupsOut: YTQ.quotaDay === today(),
+    problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded'
+  }, null, 1);
+}
+async function copyDiag() {
+  const text = diagReport();
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch (x) { ok = false; }
+    ta.remove();
+  }
+  $('#diagOut').textContent = ok
+    ? `Copied. ${Diag.fails.length ? `It has ${Diag.fails.length} problem${Diag.fails.length > 1 ? 's' : ''} in it.` : 'Nothing has gone wrong since the page loaded.'} Paste it to Claude.`
+    : "Your browser blocked copying. Long-press here and copy instead:\n" + text;
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; }
@@ -2610,6 +2742,7 @@ async function unlockSync() {
 $('#syncInBtn').addEventListener('click', unlockSync);
 $('#syncInPin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); unlockSync(); } });
 $('#syncInCancel').addEventListener('click', () => { Sync.pending = null; $('#syncIn').hidden = true; clearSyncHash(); renderAir(); });
+$('#diagBtn').addEventListener('click', copyDiag);
 $('#exportBtn').addEventListener('click', exportData);
 $('#importBtn').addEventListener('click', () => $('#importFile').click());
 $('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
@@ -2640,7 +2773,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { extractJSON, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
+window.__lunefm = { extractJSON, salvageSongs, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
 })();
 
 </script>
