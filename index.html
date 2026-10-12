@@ -10,8 +10,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gloock&family=Hanken+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: one-column radio face. Station header and tuning dial on top, the live "now" panel,
-   then the lineup. Bottom tab bar. Dark-first because it's a late-night station. */
+/* Layout: one-column radio face. Station header and tuning dial on top, then whatever show
+   is on right now, the live panel, the request line, what's coming up, and today's schedule.
+   Bottom tab bar. Dark-first because a lot of listening happens late. */
 :root{
   --bg:#121019; --panel:#1b1724; --panel-2:#252032; --line:#342c45;
   --fg:#f1e9df; --muted:#a79db4; --faint:#6f6681;
@@ -68,13 +69,14 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 @keyframes sweep{from{left:calc(16px + (100% - 32px) * .06)}to{left:calc(16px + (100% - 32px) * .94)}}
 
 /* Type + buttons */
-.display{font-family:var(--f-display);font-weight:400;font-size:clamp(1.75rem,6.4vw,2.35rem);line-height:1.08;margin:0;text-wrap:balance}
-.lede{color:var(--muted);max-width:42ch;margin:10px 0 18px}
+.display{font-family:var(--f-display);font-weight:400;font-size:clamp(1.9rem,7vw,2.5rem);line-height:1.05;margin:0;text-wrap:balance}
+.lede{color:var(--muted);max-width:44ch;margin:8px 0 14px}
 .eyebrow{display:block;font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
 .btn{appearance:none;border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:11px 18px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;text-decoration:none;color:var(--fg)}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .btn.ghost{background:transparent}
 .btn.small{min-height:38px;padding:8px 14px;font-size:.9rem}
+.btn.big{min-height:56px;font-size:1.08rem;padding:14px 24px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn svg{width:18px;height:18px;fill:currentColor;flex:none}
 .btnrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -84,25 +86,19 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 .notice p{margin:4px 0 12px;color:var(--muted)}
 .notice strong{display:block}
 
-/* Generating */
-.gen{display:grid;gap:12px;margin:0 0 20px}
-.step{display:flex;align-items:center;gap:12px;color:var(--muted)}
-.step .dot{flex:none;width:12px;height:12px;border-radius:50%;border:2px solid var(--faint)}
-.step.run .dot{border-color:var(--accent);border-right-color:transparent;animation:spin .8s linear infinite}
-.step.done{color:var(--fg)} .step.done .dot{background:var(--good);border-color:var(--good)}
-.step.fail .dot{background:var(--live);border-color:var(--live)}
-@keyframes spin{to{transform:rotate(360deg)}}
+/* What's on now */
+.nowon{display:grid;gap:6px;margin-bottom:6px}
+.nowon .studio{margin:2px 0 14px}
+.tunebtn{width:100%}
+.tunenote{font-size:.86rem;color:var(--muted);margin:10px 0 0}
 
-/* Now panel */
-.showhead{display:grid;gap:8px;margin-top:4px}
-.now{display:grid;gap:14px;margin:16px 0 0}
+/* Live panel */
+.now{display:grid;gap:14px;margin:18px 0 0}
 .nowlabel{display:flex;align-items:center;gap:8px;font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--accent)}
 .mic{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
 .mic.on{background:var(--accent);animation:pulse .9s ease-in-out infinite alternate}
 @keyframes pulse{from{opacity:.35;transform:scale(.8)}to{opacity:1;transform:scale(1.15)}}
-.talkwrap{display:grid;gap:4px}
-.hostname{font-size:.82rem;font-weight:600;color:var(--muted)}
-.talk{font-size:1.1rem;line-height:1.55;margin:0;max-width:60ch}
+.status{margin:0;color:var(--muted)}
 .trackinfo{display:grid;gap:3px;padding-top:2px}
 .t-title{font-family:var(--f-display);font-size:1.55rem;line-height:1.15;overflow-wrap:anywhere}
 .t-artist{color:var(--muted);font-weight:600}
@@ -117,6 +113,24 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 .chip{appearance:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 13px;font-size:.88rem;font-weight:600;cursor:pointer;min-height:40px;color:var(--fg)}
 .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 
+/* Studio: hosts on the mic */
+.studio{display:flex;flex-wrap:wrap;gap:6px}
+.hchip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:5px 10px 5px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.hdot{width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent));flex:none}
+.hchip.on{color:var(--fg);border-color:var(--hc);background:color-mix(in srgb,var(--hc) 18%,transparent)}
+.convo{display:grid;gap:12px}
+.line{display:grid;gap:3px;opacity:.5;transition:opacity .2s}
+.line.is-live{opacity:1}
+.who{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted)}
+.who::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent))}
+.line p{margin:0;font-size:1rem;line-height:1.5;max-width:60ch}
+.line.is-live p{font-size:1.1rem}
+
+/* Request line */
+.req{margin-top:22px}
+.req .keyrow{margin-top:8px}
+.req .note{margin-top:8px}
+
 /* Briefing */
 .brief{margin-top:14px}
 .brief summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-weight:700}
@@ -128,25 +142,31 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 .hl{font-weight:600;overflow-wrap:anywhere}
 .dt{font-size:.92rem;color:var(--muted)}
 
-/* Lineup */
+/* Lists */
 .section{font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin:28px 0 10px}
 .lineup{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
-.row{display:grid;grid-template-columns:2em minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
-.num{font:500 .8rem/1 var(--f-mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .row-main{all:unset;cursor:pointer;display:grid;gap:1px;min-width:0;padding:4px 0}
 .row-main:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.row-static{display:grid;gap:1px;min-width:0;padding:4px 0}
 .r-title{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .r-artist{font-size:.88rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.status{color:var(--accent)}
+.r-note{color:var(--accent)}
 .tag{font:500 .6rem/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;padding:5px 7px;border-radius:6px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
 .tag.new{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
 .heart{all:unset;cursor:pointer;width:38px;height:38px;display:grid;place-items:center;border-radius:50%;color:var(--faint)}
 .heart:focus-visible{outline:2px solid var(--accent)}
 .heart svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8}
 .heart.on{color:var(--live)} .heart.on svg{fill:currentColor}
-.row.is-now .num,.row.is-now .r-title{color:var(--accent)}
-.row.is-played .r-title,.row.is-played .r-artist{opacity:.55}
-.row.is-missing .r-title{text-decoration:line-through;opacity:.5}
+.emptyrow{color:var(--muted);font-size:.92rem;padding:12px 0;border-bottom:1px solid var(--line)}
+
+/* Schedule */
+.sched{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.sched li{display:grid;grid-template-columns:6.6em minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:12px 0;border-bottom:1px solid var(--line)}
+.s-time{font:500 .78rem/1.3 var(--f-mono);color:var(--faint);font-variant-numeric:tabular-nums}
+.s-name{font-weight:700}
+.s-hosts{font-size:.86rem;color:var(--muted)}
+.sched li.on .s-name,.sched li.on .s-time{color:var(--accent)}
 .showfoot{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:18px;color:var(--muted);font-size:.86rem}
 
 /* History */
@@ -172,7 +192,7 @@ legend{font:600 .7rem/1 var(--f-mono);letter-spacing:.15em;text-transform:upperc
 label.f{display:grid;gap:6px;font-weight:600;font-size:.93rem;min-width:0}
 .f small,.note{font-weight:400;color:var(--muted);font-size:.86rem}
 .note{margin:0}
-input[type=text],input[type=password],textarea,select{font:inherit;font-weight:400;font-size:1rem;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0}
+input[type=text],input[type=password],input[type=url],textarea,select{font:inherit;font-weight:400;font-size:1rem;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0}
 textarea{min-height:124px;resize:vertical;line-height:1.45}
 .keyrow{display:flex;gap:8px;min-width:0}
 .keyrow input{flex:1}
@@ -188,24 +208,12 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .guide ol{padding-left:1.25em;margin:8px 0 0;display:grid;gap:7px}
 .guide p{margin:12px 0 0;color:var(--muted);font-size:.9rem}
 code{font-family:var(--f-mono);font-size:.84em;background:var(--panel-2);padding:2px 5px;border-radius:5px;overflow-wrap:anywhere}
+.subhead{font:600 .66rem/1 var(--f-mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:4px 0 -4px}
+body:not(.vm-natural) .only-natural{display:none!important}
+body:not(.vm-phone) .only-phone{display:none!important}
 
-/* Studio: hosts on the mic */
-.studio{display:flex;flex-wrap:wrap;gap:6px}
-.hchip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:5px 10px 5px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
-.hdot{width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent));flex:none}
-.hchip.on{color:var(--fg);border-color:var(--hc);background:color-mix(in srgb,var(--hc) 18%,transparent)}
-.topicline{margin:0;font-size:.92rem;color:var(--muted)}
-.convo{display:grid;gap:12px}
-.line{display:grid;gap:3px;opacity:.5;transition:opacity .2s}
-.line.is-live{opacity:1}
-.who{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:700;color:var(--muted)}
-.who::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--hc,var(--accent))}
-.line p{margin:0;font-size:1rem;line-height:1.5;max-width:60ch}
-.line.is-live p{font-size:1.1rem}
-.line.thinking p{color:var(--muted)}
-
-/* Host editor */
-.hosts-ed{display:grid;gap:10px}
+/* Host and show editors */
+.cards{display:grid;gap:10px}
 .hostcard{border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:12px 14px}
 .hostcard.off{opacity:.62}
 .hostcard summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;min-width:0}
@@ -215,6 +223,11 @@ code{font-family:var(--f-mono);font-size:.84em;background:var(--panel-2);padding
 .hmeta{margin-left:auto;font-size:.8rem;color:var(--muted);white-space:nowrap}
 .hostbody{display:grid;gap:14px;margin-top:14px}
 .notebook ul{margin:8px 0 0;padding-left:1.1em;color:var(--muted);font-size:.9rem;display:grid;gap:4px}
+.pickhosts{display:flex;flex-wrap:wrap;gap:8px}
+.pickhosts label{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:7px 12px 7px 10px;font-size:.88rem;font-weight:600;cursor:pointer;min-height:40px}
+.pickhosts input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.qr{background:#fff;border-radius:12px;padding:12px;justify-self:start;max-width:260px}
+.qr img{display:block;width:100%;height:auto;image-rendering:pixelated}
 
 /* Bars */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;background:color-mix(in srgb,var(--bg) 90%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;justify-content:center}
@@ -230,12 +243,12 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 @media (prefers-reduced-motion:reduce){
-  .dial.tuning .needle,.onair.live .lamp,.mic.on,.step.run .dot{animation:none}
+  .dial.tuning .needle,.onair.live .lamp,.mic.on{animation:none}
   .needle,.toast{transition:none}
 }
 </style>
 </head>
-<body>
+<body class="vm-natural">
 <div class="wrap">
   <header class="head">
     <div>
@@ -253,76 +266,82 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
 
   <!-- ON AIR -->
   <main id="view-air">
+    <div class="notice" id="syncIn" hidden>
+      <strong>Bring your station to this device</strong>
+      <p>Type the PIN you picked when you made the sync link. Your keys, hosts, shows and taste will load here.</p>
+      <span class="keyrow"><input type="password" id="syncInPin" placeholder="PIN" autocomplete="off" autocapitalize="off" spellcheck="false"><button type="button" class="btn small primary" id="syncInBtn">Unlock</button></span>
+      <div class="btnrow" style="margin-top:10px"><button type="button" class="btn small ghost" id="syncInCancel">Not now</button></div>
+    </div>
     <div class="notice" id="previewNote" hidden>
       <strong>Open this from your GitHub Pages link.</strong>
       <p>This looks like a downloaded copy or a preview. YouTube and Claude only work when the page is hosted.</p>
     </div>
     <div class="notice" id="setupCard" hidden>
       <strong>Two keys and you're on air.</strong>
-      <p>The host runs on a Claude API key, and a free YouTube key finds the songs. The steps are in Settings and take about ten minutes.</p>
+      <p>The hosts run on a Claude API key, and a free YouTube key finds the songs. The steps are in Settings. If you set this up on another device, make a sync link there instead.</p>
       <button class="btn small" data-go="settings">Open Settings</button>
     </div>
 
-    <section id="genPanel" hidden>
-      <span class="eyebrow">Tuning in</span>
-      <div class="gen" id="genSteps" style="margin-top:14px"></div>
-    </section>
-
-    <section id="emptyCard" hidden>
-      <h1 class="display">Nothing on air yet today.</h1>
-      <p class="lede" id="emptyLede">Your host will pick today's songs and check the week in hip-hop. It takes about a minute.</p>
-      <div class="btnrow">
-        <button class="btn primary" id="makeBtn">Make today's show</button>
-        <button class="btn ghost" id="openLastBtn" hidden>Open your last show</button>
+    <section class="nowon" id="nowOn">
+      <span class="eyebrow" id="slotLabel">On now</span>
+      <h1 class="display" id="blockName">Lune FM</h1>
+      <p class="lede" id="blockAbout"></p>
+      <div class="studio" id="blockHosts"></div>
+      <div id="tuneWrap">
+        <button class="btn primary big tunebtn" id="tuneBtn">Tune in</button>
+        <p class="tunenote" id="tuneNote"></p>
       </div>
     </section>
 
-    <section id="showArea" hidden>
-      <div class="showhead">
-        <span class="eyebrow" id="showDate"></span>
-        <h1 class="display" id="showTitle"></h1>
+    <div class="now panel" id="livePanel" hidden>
+      <div class="nowlabel"><span class="mic" id="micDot"></span><span id="nowLabel">Tuning in</span></div>
+      <p class="status" id="statusText" hidden></p>
+      <div class="studio" id="studio" hidden></div>
+      <div class="convo" id="convo" hidden aria-live="polite"></div>
+      <div class="trackinfo" id="trackInfo" hidden>
+        <span class="eyebrow" id="tUp" style="margin-bottom:6px"></span>
+        <div class="t-title" id="tTitle"></div>
+        <div class="t-artist" id="tArtist"></div>
+        <div class="t-why" id="tWhy"></div>
+        <a class="t-link" id="tLink" href="#" target="_blank" rel="noopener">Open in YouTube Music</a>
       </div>
-
-      <div class="now panel" id="nowPanel">
-        <div class="nowlabel"><span class="mic" id="micDot"></span><span id="nowLabel">Ready when you are</span></div>
-        <div class="studio" id="studio" hidden></div>
-        <p class="topicline" id="topicLine" hidden></p>
-        <div class="convo" id="convo" hidden aria-live="polite"></div>
-        <p class="talk" id="talkText"></p>
-        <div class="trackinfo" id="trackInfo" hidden>
-          <span class="eyebrow" id="tUp" style="margin-bottom:6px">Up next</span>
-          <div class="t-title" id="tTitle"></div>
-          <div class="t-artist" id="tArtist"></div>
-          <div class="t-why" id="tWhy"></div>
-          <a class="t-link" id="tLink" href="#" target="_blank" rel="noopener">Open in YouTube Music</a>
-        </div>
-        <div class="video" id="videoBox" hidden><div id="yt"></div></div>
-        <p class="hint" id="tapHint" hidden>If the song doesn't start, tap play on the video once. After that the show runs on its own.</p>
-        <div class="transport">
-          <button class="btn primary grow" id="playBtn">Start the show</button>
-          <button class="btn" id="nextBtn" aria-label="Next">Next</button>
-        </div>
-        <div class="verdicts" id="verdicts" hidden>
-          <button class="chip" data-verdict="love">Love it</button>
-          <button class="chip" data-verdict="more">More like this</button>
-          <button class="chip" data-verdict="skip">Not for me</button>
-        </div>
+      <div class="video" id="videoBox"><div id="yt"></div></div>
+      <p class="hint" id="tapHint" hidden>If the song doesn't start, tap play on the video once. After that the station runs on its own.</p>
+      <div class="transport">
+        <button class="btn primary grow" id="playBtn">Pause</button>
+        <button class="btn" id="skipBtn">Skip</button>
       </div>
-
-      <details class="brief panel" id="briefBox" hidden>
-        <summary><span>The week in hip-hop</span><span class="muted" id="briefCount"></span></summary>
-        <p class="note" id="briefBy" style="margin-top:6px"></p>
-        <ul id="briefList"></ul>
-      </details>
-
-      <h2 class="section">The lineup</h2>
-      <ol class="lineup" id="lineup"></ol>
-
-      <div class="showfoot">
-        <span id="showMeta"></span>
-        <button class="btn ghost small" id="newShowBtn">Make a new show</button>
+      <div class="verdicts" id="verdicts" hidden>
+        <button class="chip" data-verdict="love">Love it</button>
+        <button class="chip" data-verdict="more">More like this</button>
+        <button class="chip" data-verdict="skip">Not for me</button>
       </div>
+    </div>
+
+    <section class="req" id="reqBox">
+      <span class="eyebrow">Request line</span>
+      <form class="keyrow" id="reqForm" autocomplete="off">
+        <input type="text" id="reqInput" placeholder="A song, an artist, or a vibe" enterkeyhint="send">
+        <button type="submit" class="btn small primary">Send</button>
+      </form>
+      <p class="note" id="reqNote">The hosts work it in next and give you a shout-out.</p>
     </section>
+
+    <h2 class="section" id="upHead">Coming up</h2>
+    <ol class="lineup" id="upList"></ol>
+
+    <h2 class="section" id="playedHead">Just played</h2>
+    <ol class="lineup" id="playedList"></ol>
+
+    <details class="brief panel" id="briefBox" hidden>
+      <summary><span>Today in hip-hop</span><span class="muted" id="briefCount"></span></summary>
+      <p class="note" id="briefBy" style="margin-top:6px"></p>
+      <ul id="briefList"></ul>
+    </details>
+
+    <h2 class="section" id="schedHead">Today on Lune FM</h2>
+    <ul class="sched" id="schedList"></ul>
+    <div class="showfoot"><span id="spendLine"></span></div>
   </main>
 
   <!-- HISTORY -->
@@ -340,10 +359,10 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
     <h1 class="display">Settings</h1>
     <form class="form" id="settingsForm" autocomplete="off">
       <details class="panel guide" id="guide">
-        <summary>How to get your two keys</summary>
-        <h3>Claude API key (runs the host)</h3>
+        <summary>How to get your keys</summary>
+        <h3>Claude API key (runs the hosts)</h3>
         <ol>
-          <li>Go to <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> and sign in or make an account.</li>
+          <li>Go to <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> and sign in.</li>
           <li>Open Settings, then Billing. Add a payment method and a small amount of credit.</li>
           <li>Open Settings, then Limits. Set a monthly limit, like $5. The station can never spend more than that.</li>
           <li>Open Settings, then API Keys. Tap Create Key, name it Lune FM, and copy it. It starts with <code>sk-ant-</code> and only shows once.</li>
@@ -351,11 +370,20 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         </ol>
         <h3>YouTube API key (finds the songs, free)</h3>
         <ol>
-          <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener">console.cloud.google.com</a>, sign in with your Google account, and create a project called Lune FM.</li>
+          <li>Go to <a href="https://console.cloud.google.com" target="_blank" rel="noopener">console.cloud.google.com</a> and create a project called Lune FM.</li>
           <li>Open APIs and Services, then Library. Search for YouTube Data API v3 and tap Enable.</li>
           <li>Open APIs and Services, then Credentials. Tap Create credentials, then API key, and copy it.</li>
-          <li>Edit the key. Under Application restrictions, pick Websites and add <code id="originCode">https://your-name.github.io/*</code>. Under API restrictions, pick YouTube Data API v3. Save.</li>
           <li>Paste it in the YouTube API key box below.</li>
+        </ol>
+        <h3>Natural voices (optional, same Google project)</h3>
+        <ol>
+          <li>In the same project, open APIs and Services, then Library. Search for Cloud Text-to-Speech API and tap Enable.</li>
+          <li>Google asks you to turn on billing for this API, even on the free tier. Follow its steps. The first 1 million characters each month are free, which covers several hours of listening every day. After that it's $30 per million characters, so set a budget alert under Billing if you want a heads-up.</li>
+          <li>If you limited your key to certain APIs, edit the key and add Cloud Text-to-Speech API to the list. Then your YouTube key works for both, and you can leave the voice key box empty.</li>
+        </ol>
+        <h3>Locking your Google key to your site (do this last)</h3>
+        <ol>
+          <li>Once everything works, edit the key. Under Application restrictions, pick Websites and add <code id="originCode">https://your-name.github.io/*</code>. Save.</li>
         </ol>
         <p>Then tap Test keys. Your keys stay in this browser only. They are not in the page's code, so your GitHub page never shows them.</p>
       </details>
@@ -367,10 +395,35 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         </label>
         <label class="f" for="s-ytKey">YouTube API key
           <span class="keyrow"><input type="password" id="s-ytKey" placeholder="AIza..." spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ytKey">Show</button></span>
-          <small>Free. About 100 song lookups a day, and the station remembers songs it already found.</small>
+          <small>Free. About 100 new song lookups a day. The station remembers every song it already found, so repeats don't count.</small>
+        </label>
+        <label class="f only-natural" for="s-ttsKey">Google voice key (optional)
+          <span class="keyrow"><input type="password" id="s-ttsKey" placeholder="Leave empty to use your YouTube key" spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ttsKey">Show</button></span>
         </label>
         <div class="btnrow"><button type="button" class="btn small" id="testBtn">Test keys</button></div>
         <div class="testout" id="testOut" aria-live="polite"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Your other devices</legend>
+        <p class="note">Make a link that carries your keys, hosts, shows and taste to another phone or computer. It's locked with a PIN you pick. Anyone with both the link and the PIN gets your keys, so only send it to yourself.</p>
+        <label class="f" for="syncPin">Pick a PIN
+          <input type="password" id="syncPin" placeholder="At least 6 letters or numbers" autocomplete="new-password" autocapitalize="off" spellcheck="false">
+        </label>
+        <label class="switch" for="syncTaste">Include loved songs and what you skipped<input type="checkbox" id="syncTaste" checked></label>
+        <div class="btnrow"><button type="button" class="btn small" id="syncMake">Make sync link</button></div>
+        <div id="syncOut" hidden style="display:grid;gap:12px">
+          <input type="text" id="syncLink" readonly aria-label="Sync link">
+          <div class="btnrow">
+            <button type="button" class="btn small primary" id="syncCopy">Copy link</button>
+            <button type="button" class="btn small" id="syncShare" hidden>Share</button>
+          </div>
+          <div class="qr" id="syncQR" hidden></div>
+          <p class="note" id="syncQRNote"></p>
+        </div>
+        <label class="f" for="syncPaste">Got a sync link? Paste it here
+          <span class="keyrow"><input type="url" id="syncPaste" placeholder="https://..." autocapitalize="off" spellcheck="false"><button type="button" class="btn small" id="syncPasteBtn">Open</button></span>
+        </label>
       </fieldset>
 
       <fieldset>
@@ -383,10 +436,30 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
       </fieldset>
 
       <fieldset>
+        <legend>Shows</legend>
+        <p class="note">The station follows this schedule by the clock on your device. Each show runs until the next one starts.</p>
+        <div class="cards" id="showsEd"></div>
+        <div class="btnrow"><button type="button" class="btn small" id="addShow">Add a show</button></div>
+      </fieldset>
+
+      <fieldset>
         <legend>Hosts</legend>
         <p class="note">Each host is its own Claude agent with its own personality, voice and notebook. They share the mic, react to each other, and react to what you love or skip.</p>
-        <div class="hosts-ed" id="hostsEd"></div>
+        <div class="cards" id="hostsEd"></div>
         <div class="btnrow"><button type="button" class="btn small" id="addHost">Add a host</button></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Voices</legend>
+        <label class="f" for="s-voiceMode">How the hosts sound
+          <select id="s-voiceMode">
+            <option value="natural">Natural voices from Google</option>
+            <option value="phone">Phone voices</option>
+            <option value="off">No voices, captions only</option>
+          </select>
+          <small class="only-natural">Natural voices need the Cloud Text-to-Speech API turned on. If they stop working, the station switches to phone voices on its own.</small>
+          <small class="only-phone">These come from your phone's text to speech. Pick a different voice, pitch and speed for each host.</small>
+        </label>
       </fieldset>
 
       <fieldset>
@@ -394,9 +467,6 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f" for="s-topics">Topics the hosts can go off on
           <textarea id="s-topics"></textarea>
           <small>Separate with commas. Topic breaks are opinions and jokes, not news.</small>
-        </label>
-        <label class="f" for="s-topicBreaks">Topic breaks per show
-          <select id="s-topicBreaks"><option value="0">None</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
         </label>
         <label class="f" for="s-houseRules">House rules for every host
           <textarea id="s-houseRules"></textarea>
@@ -407,30 +477,21 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <legend>Your taste</legend>
         <label class="f" for="s-artists">Artists you love
           <textarea id="s-artists"></textarea>
-          <small>Separate with commas. The host leans on these but finds new people too.</small>
+          <small>Separate with commas. The shows lean on these but find new people too.</small>
         </label>
         <label class="f" for="s-tasteNotes">What you like about music
           <textarea id="s-tasteNotes"></textarea>
         </label>
-        <div class="two">
-          <label class="f" for="s-trackCount">Songs per show
-            <select id="s-trackCount"><option value="6">6</option><option value="8">8</option><option value="10">10</option><option value="12">12</option></select>
-          </label>
-          <label class="f" for="s-mix">Mix
-            <select id="s-mix"><option value="new">Mostly new finds</option><option value="balanced">Half and half</option><option value="familiar">Mostly favorites</option></select>
-          </label>
-        </div>
-        <label class="switch" for="s-briefingOn">Start each show with the week in hip-hop<input type="checkbox" id="s-briefingOn"></label>
-        <label class="f" for="s-briefFocus">What the news should cover
-          <textarea id="s-briefFocus"></textarea>
-          <small>The news uses web search, about a cent per search, up to four per show.</small>
-        </label>
       </fieldset>
 
       <fieldset>
-        <legend>Voices</legend>
-        <label class="switch" for="s-voiceOn">Read the hosts' lines out loud<input type="checkbox" id="s-voiceOn"></label>
-        <p class="note">Voices come from your phone. Pick a voice, pitch and speed for each host above so they sound different. If a voice sounds robotic, try another.</p>
+        <legend>Daily briefing</legend>
+        <label class="switch" for="s-briefingOn">Read today's hip-hop news once a day<input type="checkbox" id="s-briefingOn"></label>
+        <p class="note">It airs early in the first show you tune into each day, read by whoever has the news desk.</p>
+        <label class="f" for="s-briefFocus">What the news should cover
+          <textarea id="s-briefFocus"></textarea>
+          <small>Uses web search, about a cent per search, up to four a day.</small>
+        </label>
       </fieldset>
 
       <fieldset>
@@ -441,7 +502,7 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
             <option value="claude-haiku-5-5">Haiku 5.5, cheapest</option>
             <option value="claude-opus-5-5">Opus 5.5, costs most</option>
           </select>
-          <small>Runs once per show to plan the songs, who's on the mic, and the topic breaks. Real songs matter most here, so it starts on Sonnet. Every show lists what it cost.</small>
+          <small>Picks a few songs at a time while the station plays. Real songs matter most here, so it starts on Sonnet. The On air page shows what today has cost.</small>
         </label>
       </fieldset>
 
@@ -486,17 +547,25 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad2 = n => String(n).padStart(2, '0');
 const localDate = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const today = () => localDate(new Date());
 const fmtDate = iso => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-const partOfDay = d => { const h = d.getHours(); return h < 5 ? 'late night' : h < 12 ? 'morning' : h < 17 ? 'afternoon' : h < 21 ? 'evening' : 'late night'; };
+const fmtClock = d => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const fmtHour = h => { const x = ((Math.round(h) % 24) + 24) % 24; return x === 0 ? 'Midnight' : x === 12 ? 'Noon' : `${x % 12} ${x < 12 ? 'AM' : 'PM'}`; };
 const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 const trackKey = t => norm(t.artist) + '|' + norm(t.title);
 const cleanHost = s => String(s || '').replace(/\s*[—–]\s*/g, ', ').replace(/,\s*([,.!?])/g, '$1').replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
-const fmtCost = c => !c ? '' : c < 0.01 ? 'under 1¢' : c < 1 ? `${Math.round(c * 100)}¢` : `$${c.toFixed(2)}`;
+const fmtCost = c => !c ? 'nothing yet' : c < 0.01 ? 'under 1¢' : c < 1 ? `${Math.round(c * 100)}¢` : `$${c.toFixed(2)}`;
 const urlKey = u => String(u || '').replace(/^https?:\/\/(www\.)?/i, '').replace(/[#?].*$/, '').replace(/\/$/, '').toLowerCase();
 const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
 const reEsc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const modelName = m => ({ 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-haiku-5-5': 'Haiku 5.5', 'claude-opus-5-5': 'Opus 5.5' })[m] || m;
-class UserError extends Error { constructor(m, o = {}) { super(m); this.fatal = !!o.fatal; } }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const shuffle = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+const words = s => String(s || '').split(/\s+/).filter(Boolean).length;
+const listJoin = a => a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}` : (a[0] || '');
+const firstSentence = s => (String(s || '').match(/^[^.!?]+[.!?]?/) || [''])[0].trim();
+class UserError extends Error { constructor(m, o = {}) { super(m); this.fatal = !!o.fatal; this.code = o.code || ''; } }
 
 const ICON = {
   play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
@@ -504,61 +573,102 @@ const ICON = {
   heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.2-4.4-9.2-8.8C1.4 8.5 3.4 4.8 6.9 4.8c2 0 3.4 1.1 4.1 2.3.8-1.2 2.1-2.3 4.1-2.3 3.5 0 5.5 3.7 4.1 6.9-2 4.4-9.2 8.8-9.2 8.8z"/></svg>'
 };
 
-/* ---------- state ---------- */
+/* ---------- constants ---------- */
 const LS_KEY = 'lunefm.v1';
 const PRICES = { 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.10, 0.50], 'claude-opus-5-5': [4, 20] }; // $ per million tokens
 const SEARCH_PRICE = 0.01;
 const HOST_COLORS = ['#e0913a', '#d9677e', '#2fa59a', '#8f7ae0', '#5aa86a', '#c9a227', '#4f8fd6', '#c26bc4'];
 const HAIKU = 'claude-haiku-5-5';
+// Google Chirp 3 HD voices: [name, how it sounds, gender]
+const GVOICES = [
+  ['Achernar', 'soft', 'f'], ['Achird', 'friendly', 'm'], ['Algenib', 'gravelly', 'm'], ['Algieba', 'smooth', 'm'], ['Alnilam', 'firm', 'm'],
+  ['Aoede', 'breezy', 'f'], ['Autonoe', 'bright', 'f'], ['Callirrhoe', 'easy-going', 'f'], ['Charon', 'informative', 'm'], ['Despina', 'smooth', 'f'],
+  ['Enceladus', 'breathy', 'm'], ['Erinome', 'clear', 'f'], ['Fenrir', 'excitable', 'm'], ['Gacrux', 'mature', 'f'], ['Iapetus', 'clear', 'm'],
+  ['Kore', 'firm', 'f'], ['Laomedeia', 'upbeat', 'f'], ['Leda', 'youthful', 'f'], ['Orus', 'firm', 'm'], ['Puck', 'upbeat', 'm'],
+  ['Pulcherrima', 'forward', 'f'], ['Rasalgethi', 'informative', 'm'], ['Sadachbia', 'lively', 'm'], ['Sadaltager', 'knowledgeable', 'm'], ['Schedar', 'even', 'm'],
+  ['Sulafat', 'warm', 'f'], ['Umbriel', 'easy-going', 'm'], ['Vindemiatrix', 'gentle', 'f'], ['Zephyr', 'bright', 'f'], ['Zubenelgenubi', 'casual', 'm']
+];
+const DEFAULT_GVOICE = { jules: 'Algieba', dez: 'Puck', ada: 'Kore', milo: 'Fenrir', nova: 'Sulafat' };
+
 const DEFAULT_HOSTS = [
-  { id: 'jules', name: 'Jules', color: HOST_COLORS[0], model: HAIKU, enabled: true, voiceName: '', pitch: 1, rate: 1, notebook: [],
+  { id: 'jules', name: 'Jules', color: HOST_COLORS[0], model: HAIKU, enabled: true, gvoice: 'Algieba', grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [],
     personality: 'The anchor. Smooth late-night R&B voice, warm and unhurried. Loves the stories behind songs: who produced it, what it sampled. Plays referee when the others get wild, but laughs at everything. Music lane: R&B, slow jams, quiet storm.' },
-  { id: 'dez', name: 'Dez', color: HOST_COLORS[1], model: HAIKU, enabled: true, voiceName: '', pitch: 1.12, rate: 1.08, notebook: [],
+  { id: 'dez', name: 'Dez', color: HOST_COLORS[1], model: HAIKU, enabled: true, gvoice: 'Puck', grate: 1.06, voiceName: '', pitch: 1.12, rate: 1.08, notebook: [],
     personality: 'Hype energy. Loud, funny, quick with a comeback. Lives for bars, beat switches and producers. Takes it personally, in a funny way, when one of his picks gets skipped. Music lane: hip-hop, from boom bap to the newest underground rappers.' },
-  { id: 'ada', name: 'Ada', color: HOST_COLORS[2], model: HAIKU, enabled: true, voiceName: '', pitch: 1.05, rate: 1, notebook: [],
+  { id: 'ada', name: 'Ada', color: HOST_COLORS[2], model: HAIKU, enabled: true, gvoice: 'Kore', grate: 1, voiceName: '', pitch: 1.05, rate: 1, notebook: [],
     personality: 'Cool and dry. Never raises her voice and still wins every argument. Deep in Nigerian and diaspora music. Runs the news desk. Music lane: Afro-R&B, alté, Afrobeats, UK and Canadian R&B.' },
-  { id: 'milo', name: 'Milo', color: HOST_COLORS[3], model: HAIKU, enabled: true, voiceName: '', pitch: 1.2, rate: 1.05, notebook: [],
+  { id: 'milo', name: 'Milo', color: HOST_COLORS[3], model: HAIKU, enabled: true, gvoice: 'Fenrir', grate: 1.04, voiceName: '', pitch: 1.2, rate: 1.05, notebook: [],
     personality: 'The station nerd. Tech, gadgets, anime and video games, and he connects everything back to them. Goes on tangents, makes terrible puns, gets roasted for it and loves it. Music lane: alt R&B, lo-fi, internet-born artists, anime and game soundtracks with soul.' },
-  { id: 'nova', name: 'Nova', color: HOST_COLORS[4], model: HAIKU, enabled: true, voiceName: '', pitch: 0.88, rate: 0.95, notebook: [],
+  { id: 'nova', name: 'Nova', color: HOST_COLORS[4], model: HAIKU, enabled: true, gvoice: 'Sulafat', grate: 0.96, voiceName: '', pitch: 0.88, rate: 0.95, notebook: [],
     personality: 'Old soul crate digger. Jazz, neo-soul and vinyl culture. Talks a little poetic and dramatic, and the others tease her for it. Secretly the funniest when she drops a one-liner. Music lane: jazz, neo-soul, jazz and hip-hop crossovers, classic soul samples.' }
 ];
+const DEFAULT_SCHEDULE = [
+  { id: 'wakeup', name: 'The Wake Up', start: 6, hosts: ['jules', 'dez', 'ada'], talk: 'chatty',
+    about: 'The morning show. Full crew, good energy, lots of back and forth. A mix of favorites and new finds that builds from easy to upbeat.' },
+  { id: 'fresh', name: 'Fresh Finds', start: 11, hosts: ['milo', 'ada'], talk: 'balanced',
+    about: "New discoveries. At least four in five songs are artists the listener probably hasn't heard yet, built off what they love. The hosts say why each one made the cut." },
+  { id: 'rewind', name: 'Rewind', start: 16, hosts: ['nova', 'dez'], talk: 'balanced',
+    about: 'Throwbacks. Classics and older cuts, mostly eight or more years old: the artists and eras the listener likes, the records that shaped them, and the samples they flipped.' },
+  { id: 'afterhours', name: 'After Hours', start: 21, hosts: ['jules', 'nova'], talk: 'light',
+    about: 'Late night. Slower R&B, quiet storm, mellow neo-soul and jazz. Mostly music, with calm, low-key talk.' }
+];
+const TALK_LEVELS = [['chatty', 'Lots of talk'], ['balanced', 'Some talk'], ['light', 'Mostly music']];
 const DEFAULT_SETTINGS = {
-  claudeKey: '', ytKey: '',
+  claudeKey: '', ytKey: '', ttsKey: '',
   listener: 'Lune', station: 'Lune FM', freq: '88.7',
   artists: 'Brent Faiyaz, Lucky Daye, dvsn, GIVĒON, Ovi Wood, Odeal, Isaiah Falls, Olivia Dean, Mac Miller, Kendrick Lamar, 6LACK, Isaiah Rashad, Robert Glasper',
   tasteNotes: 'R&B at the core with a deep hip-hop foundation. Loves the most melodic, atmospheric cuts in any catalog, and songs where two voices share the same intimate register. Strong Nigerian and diaspora thread. Into jazz and vinyl culture. Likes finding artists before they blow up.',
   briefFocus: "Don't center the news on Kendrick Lamar, 6LACK, dvsn or Isaiah Rashad. Cover similar artists and the whole hip-hop world: new music, tours and shows, movies and TV, fashion and culture.",
-  trackCount: 8, mix: 'new', briefingOn: true,
+  briefingOn: true,
   topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
-  topicBreaks: 2,
   houseRules: 'Keep it fun and loose. Light cursing is fine. Tease each other all you want, but be good to the listener: never compare them to anyone, never rush them, always use their name. No jokes about real people’s looks or identities.',
-  voiceOn: true,
+  voiceMode: 'natural',
   directorModel: 'claude-sonnet-5-5',
   newsHost: 'ada',
-  hosts: DEFAULT_HOSTS
+  hosts: DEFAULT_HOSTS,
+  schedule: DEFAULT_SCHEDULE
 };
 const clone = o => JSON.parse(JSON.stringify(o));
-const freshState = () => ({ v: 2, settings: clone(DEFAULT_SETTINGS), shows: [], feedback: [], played: [], ytCache: {}, currentShowId: null });
+const freshState = () => ({ v: 3, settings: clone(DEFAULT_SETTINGS), sessions: [], feedback: [], played: [], ytCache: {}, queue: null, briefing: null, spend: {} });
 
+/* ---------- state ---------- */
+function migrateHosts(list) {
+  return list.map((h, i) => ({
+    gvoice: DEFAULT_GVOICE[h.id] || GVOICES[(i * 7) % GVOICES.length][0], grate: 1,
+    voiceName: '', pitch: 1, rate: 1, notebook: [], model: HAIKU, enabled: true,
+    ...h
+  }));
+}
 function loadState() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const d = JSON.parse(raw), base = freshState();
-      const old = d.settings || {};
-      const settings = { ...base.settings, ...old };
-      if (!Array.isArray(old.hosts) || !old.hosts.length) {
-        settings.hosts = clone(DEFAULT_HOSTS);
-        // carry over a v1 single host if it was customized
-        if (old.host && old.host !== 'Jules') settings.hosts[0].name = old.host;
-        if (old.voiceName) settings.hosts[0].voiceName = old.voiceName;
-        if (old.model && !old.directorModel) settings.directorModel = old.model;
-      }
-      ['host', 'hostStyle', 'voiceName', 'rate', 'model'].forEach(k => delete settings[k]);
-      return { ...base, ...d, v: 2, settings };
+    if (!raw) return freshState();
+    const d = JSON.parse(raw), base = freshState();
+    const old = d.settings || {};
+    const settings = { ...base.settings, ...old };
+    if (!Array.isArray(old.hosts) || !old.hosts.length) {
+      settings.hosts = clone(DEFAULT_HOSTS);
+      if (old.host && old.host !== 'Jules') settings.hosts[0].name = old.host;
+      if (old.voiceName) settings.hosts[0].voiceName = old.voiceName;
+      if (old.model && !old.directorModel) settings.directorModel = old.model;
     }
-  } catch (e) {}
-  return freshState();
+    settings.hosts = migrateHosts(settings.hosts);
+    if (!Array.isArray(old.schedule) || !old.schedule.length) settings.schedule = clone(DEFAULT_SCHEDULE);
+    if (old.voiceOn === false && !old.voiceMode) settings.voiceMode = 'off';
+    ['host', 'hostStyle', 'voiceName', 'rate', 'model', 'trackCount', 'mix', 'topicBreaks', 'voiceOn'].forEach(k => delete settings[k]);
+    const st = { ...base, ...d, v: 3, settings };
+    if (!Array.isArray(st.sessions)) st.sessions = [];
+    if (Array.isArray(d.shows) && d.shows.length && !d.sessions) {
+      // shows from the old one-show-at-a-time version become history entries
+      st.sessions = d.shows.map(s => ({
+        id: s.id, showId: null, name: s.title || 'Show', date: s.date, startedAt: s.createdAt, cost: s.cost || 0, notebooked: true, log: [],
+        tracks: (s.tracks || []).filter(t => t.status === 'played' || t.verdict).map(t => ({ artist: t.artist, title: t.title, tag: t.tag, why: t.why, pickedBy: t.pickedBy, verdict: t.verdict, videoIds: t.videoIds, vi: t.vi || 0, status: 'played' }))
+      }));
+    }
+    delete st.shows; delete st.currentShowId;
+    if (!st.spend || typeof st.spend !== 'object') st.spend = {};
+    return st;
+  } catch (e) { return freshState(); }
 }
 let S = loadState();
 function save() {
@@ -566,13 +676,22 @@ function save() {
   catch (e) { toast("Couldn't save to this browser. Storage may be full or blocked."); }
 }
 let saveT = null;
-const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 300); };
+const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 400); };
+let spendHook = null;
+function addSpend(c) {
+  if (!c) return;
+  const d = today();
+  S.spend[d] = (S.spend[d] || 0) + c;
+  if (spendHook) spendHook(c);
+  const keys = Object.keys(S.spend).sort();
+  if (keys.length > 40) keys.slice(0, keys.length - 40).forEach(k => delete S.spend[k]);
+  saveSoon();
+}
 
-const UI = { view: 'air', histTab: 'shows', showOpen: false, armed: {} };
-const Gen = { busy: false, steps: [] };
-const Eng = { show: null, segs: [], i: -1, running: false, paused: false, token: 0, pending: null, cancelTalk: null, error: null, watch: null, speaker: null, thinking: null, saying: null, poll: null };
-const currentShow = () => S.shows.find(s => s.id === S.currentShowId) || null;
+const UI = { view: 'air', histTab: 'shows', armed: {} };
 const looksPreview = location.protocol === 'file:' || location.origin === 'null' || /claude|anthropic/i.test(location.hostname);
+const L = () => S.settings.listener || 'Lune';
+const STN = () => S.settings.station || 'Lune FM';
 
 /* ---------- hosts ---------- */
 const hosts = () => S.settings.hosts;
@@ -581,13 +700,38 @@ const hostById = id => hosts().find(h => h.id === id) || null;
 const hostName = id => (hostById(id) || {}).name || 'A host';
 const anchorHost = () => activeHosts()[0] || hosts()[0];
 const newsHost = () => { const h = hostById(S.settings.newsHost); return h && h.enabled ? h : anchorHost(); };
-function nameToId(name) {
+function nameToId(name, pool) {
   const n = norm(name);
-  if (!n || n === 'none') return null;
-  const h = activeHosts().find(x => norm(x.name) === n) || activeHosts().find(x => n.includes(norm(x.name)));
+  if (!n || n === 'none' || n === 'nobody') return null;
+  const list = pool || activeHosts();
+  const h = list.find(x => norm(x.name) === n) || list.find(x => n.includes(norm(x.name)));
   return h ? h.id : null;
 }
-const firstSentence = s => (String(s || '').match(/^[^.!?]+[.!?]?/) || [''])[0].trim();
+
+/* ---------- schedule ---------- */
+const sched = () => S.settings.schedule.slice().sort((a, b) => a.start - b.start);
+function blockAt(d) {
+  const list = sched();
+  if (!list.length) return null;
+  const h = d.getHours() + d.getMinutes() / 60;
+  let cur = list[list.length - 1];
+  for (const b of list) if (h >= b.start) cur = b;
+  return cur;
+}
+function nextBlockOf(b) { const list = sched(); const i = list.findIndex(x => x.id === b.id); return list[(i + 1) % list.length]; }
+function blockEndHour(b) { return nextBlockOf(b).start; }
+function blockSlot(b) { const list = sched(); return list.length < 2 ? 'All day' : `${fmtHour(b.start)} to ${fmtHour(blockEndHour(b))}`; }
+function minutesLeftInBlock(b, now = new Date()) {
+  if (sched().length < 2) return Infinity;
+  const end = blockEndHour(b), h = now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600;
+  let diff = end - h;
+  if (diff <= 0) diff += 24;
+  return diff * 60;
+}
+function blockHosts(b) {
+  const ids = (b && b.hosts || []).filter(id => { const h = hostById(id); return h && h.enabled; });
+  return ids.length ? ids : [anchorHost().id];
+}
 
 /* ---------- toast ---------- */
 let toastT = null;
@@ -608,6 +752,7 @@ function claudeErr(status, data) {
   if (status === 529 || status === 503 || /overloaded/i.test(msg)) return 'Claude is busy right now. Try again in a minute.';
   return 'Claude returned an error' + (msg ? ': ' + msg : '.');
 }
+const isFatalClaude = (status, msg) => status === 401 || status === 403 || /credit balance|spend|usage limit/i.test(msg || '');
 
 async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
   const key = (S.settings.claudeKey || '').trim();
@@ -638,10 +783,13 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
         body: JSON.stringify(body)
       });
     } catch (e) {
-      throw new UserError(looksPreview ? 'Claude is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach Claude. Check your connection and try again.");
+      throw new UserError(looksPreview ? 'Claude is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach Claude. Check your connection.");
     }
     const data = await res.json().catch(() => null);
-    if (!res.ok) throw new UserError(claudeErr(res.status, data), { fatal: res.status === 401 || res.status === 403 });
+    if (!res.ok) {
+      const msg = (data && data.error && data.error.message) || '';
+      throw new UserError(claudeErr(res.status, data), { fatal: isFatalClaude(res.status, msg) });
+    }
     const u = data.usage || {};
     usage.input += u.input_tokens || 0;
     usage.output += u.output_tokens || 0;
@@ -658,6 +806,7 @@ async function callClaude({ system, user, tools, maxTokens = 3000, model }) {
   }
   const [pi, po] = PRICES[model] || [2, 10];
   const cost = usage.input * pi / 1e6 + usage.output * po / 1e6 + usage.searches * SEARCH_PRICE;
+  addSpend(cost);
   return { text, urls, usage, cost };
 }
 
@@ -666,144 +815,114 @@ function extractJSON(text) {
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1];
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a < 0 || b <= a) throw new UserError("The reply came back in the wrong shape. Try again.");
+  if (a < 0 || b <= a) throw new UserError("The reply came back in the wrong shape.");
   try { return JSON.parse(t.slice(a, b + 1)); }
-  catch (e) { throw new UserError("The reply came back in the wrong shape. Try again."); }
+  catch (e) { throw new UserError("The reply came back in the wrong shape."); }
 }
 
-/* ---------- show planning (program director) ---------- */
-const MIX = {
-  new: 'Mostly new discoveries, about 6 in 10 songs, plus a few favorites and deep cuts.',
-  balanced: 'About half new discoveries, half favorites and deep cuts.',
-  familiar: 'Mostly favorites and deep cuts, with a couple of new discoveries.'
-};
-const normTag = t => { t = norm(t); return t.startsWith('deep') ? 'deep cut' : t.startsWith('fav') ? 'favorite' : 'new'; };
+/* ---------- song picking (program director) ---------- */
+const normTag = t => { t = norm(t); return t.startsWith('deep') ? 'deep cut' : t.startsWith('fav') ? 'favorite' : t.startsWith('throw') || t.startsWith('classic') ? 'throwback' : 'new'; };
 const fmtT = f => `${f.artist} - ${f.title}`;
 
-function buildContext(now) {
+function tasteContext() {
   return {
-    now,
-    dateText: now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-    part: partOfDay(now),
     loved: S.feedback.filter(f => f.verdict === 'love').slice(0, 30).map(fmtT),
     more: S.feedback.filter(f => f.verdict === 'more').slice(0, 15).map(fmtT),
     skipped: S.feedback.filter(f => f.verdict === 'skip').slice(0, 30).map(fmtT),
     played: S.played.slice(0, 120).map(fmtT)
   };
 }
+function knownSongs() {
+  // songs the station already found on YouTube, for days the lookups run out
+  const seen = new Set(), out = [];
+  const recent = new Set(S.played.slice(0, 25).map(p => p.k));
+  const skip = new Set(S.feedback.filter(f => f.verdict === 'skip').map(f => f.k));
+  [...S.feedback, ...S.played].forEach(p => {
+    const k = trackKey(p);
+    if (seen.has(k) || recent.has(k) || skip.has(k) || !(S.ytCache[k] && S.ytCache[k].length)) return;
+    seen.add(k); out.push(fmtT(p));
+  });
+  return out.slice(0, 80);
+}
 
-async function planShow(ctx) {
-  const st = S.settings, L = st.listener || 'Lune', ST = st.station || 'the station';
-  const crew = activeHosts();
-  const n = Number(st.trackCount) || 8;
-  const breaks = Math.min(3, Math.max(0, Number(st.topicBreaks) || 0));
+async function planSet(block, n, opts = {}) {
+  const st = S.settings, crew = blockHosts(block).map(hostById);
+  const ctx = tasteContext(), now = new Date();
   const system = [
-    `You are the program director of ${ST}, a personal radio station made for one listener named ${L}. You plan each show for a crew of radio hosts. You never speak on air.`,
+    `You are the program director of ${STN()}, a personal radio station made for one listener named ${L()}. You pick the songs for one show at a time, a few songs at a time, while the station is live. You never speak on air.`,
     '',
     'Rules:',
     '- Only pick songs that really exist. Use the exact official song title and the main artist name as they appear on streaming services.',
     '- Never repeat a song from the recently played list.',
     '- Build a flow. Think about how each song hands off to the next: tempo, mood, era.',
-    "- Give each song to the host whose music lane fits it best, and spread the picks across the crew.",
-    '- Use host names exactly as written in the crew list.'
+    '- Give each song to the host on this show whose music lane fits it best, and spread the picks across them.',
+    '- Use host names exactly as written.'
   ].join('\n');
   const lines = [
-    `Today is ${ctx.dateText}, ${ctx.part}. Plan a show with ${n} songs for ${L}.`,
+    `It's ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, ${fmtClock(now)}.`,
+    `The show on air: ${block.name}. ${block.about}`,
     '',
-    'The crew:',
+    'Hosts on this show:',
     ...crew.map(h => `- ${h.name}: ${h.personality}`),
     '',
-    `Mix: ${MIX[st.mix] || MIX.new}`,
-    `Artists ${L} loves: ${st.artists}`,
-    `About ${L}'s taste: ${st.tasteNotes}`
+    `Artists ${L()} loves: ${st.artists}`,
+    `About ${L()}'s taste: ${st.tasteNotes}`
   ];
-  if (ctx.loved.length) lines.push(`Songs ${L} loved recently: ${ctx.loved.join('; ')}`);
-  if (ctx.more.length) lines.push(`${L} asked for more songs like: ${ctx.more.join('; ')}`);
-  if (ctx.skipped.length) lines.push(`Not for ${L}, so avoid these and anything close to them: ${ctx.skipped.join('; ')}`);
+  if (ctx.loved.length) lines.push(`Songs ${L()} loved recently: ${ctx.loved.join('; ')}`);
+  if (ctx.more.length) lines.push(`${L()} asked for more songs like: ${ctx.more.join('; ')}`);
+  if (ctx.skipped.length) lines.push(`Not for ${L()}, so avoid these and anything close to them: ${ctx.skipped.join('; ')}`);
   if (ctx.played.length) lines.push(`Recently played, do not repeat: ${ctx.played.join('; ')}`);
+  if (opts.after && opts.after.length) lines.push('', `Already lined up in this show, in order, so keep the flow going after the last one: ${opts.after.map(fmtT).join('; ')}`);
+  if (opts.known) lines.push('', `Today's YouTube lookups ran out, so you can ONLY pick from this list of songs the station already has: ${opts.known.join('; ')}`);
+  if (opts.request) lines.push('', `${L()} called the request line asking for: "${opts.request}". The first song must answer that request. If they named a song, play that exact song.`);
   lines.push('',
-    breaks ? `Plan ${breaks} topic break${breaks > 1 ? 's' : ''} between songs, where 2 or 3 hosts go off on a tangent for a minute. Pick from these topics and give each one a specific, fun angle: ${st.topics}. Match topics to hosts who would have opinions about them.` : 'No topic breaks in this show.',
-    '',
+    `Pick the next ${n} songs.`,
     'Reply with only a JSON object, no other text, in this shape:',
-    '{',
-    '  "show_title": "a short name for this show, 2 to 5 words",',
-    '  "opening_hosts": ["2 or 3 host names"],',
-    '  "songs": [',
-    '    {"artist": "main artist", "title": "exact song title", "tag": "new or favorite or deep cut", "why": "one short line for the screen, under 14 words", "picked_by": "host name", "on_mic": ["the host who picked it, and sometimes one more host"]}',
-    '  ],',
-    '  "topic_breaks": [{"after_song": 3, "topic": "the specific angle, one sentence", "hosts": ["2 or 3 host names"]}],',
-    '  "signoff_hosts": ["1 or 2 host names"]',
-    '}',
-    `"new" means an artist or song ${L} probably has not heard yet. "favorite" means a song by one of the artists ${L} loves. "deep cut" means a lesser-known song by an artist ${L} already knows. "after_song" is the number of the song the break comes after, counting from 1. About a third of songs should have two hosts on the mic.`
+    '{"songs": [{"artist": "main artist", "title": "exact song title", "tag": "new or favorite or deep cut or throwback", "why": "one short line for the screen, under 14 words", "picked_by": "host name"}],',
+    ` "topic": "one specific, funny angle for a quick topic break, drawn from these topics: ${st.topics}. Fit it to the hosts on this show."}`,
+    `"new" means an artist or song ${L()} probably has not heard yet. "favorite" means a song by an artist ${L()} loves. "deep cut" means a lesser-known song by an artist ${L()} already knows. "throwback" means an older classic.`
   );
-  const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 4500, model: st.directorModel });
+  const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 300 + n * 140, model: st.directorModel });
   const d = extractJSON(r.text);
-
-  const anchor = anchorHost().id;
-  const toIds = (arr, max) => [...new Set((Array.isArray(arr) ? arr : [arr]).map(nameToId).filter(Boolean))].slice(0, max);
-  const otherHost = except => { const pool = activeHosts().filter(h => !except.includes(h.id)); return pool.length ? pool[Math.floor(Math.random() * pool.length)].id : null; };
-
-  const songs = Array.isArray(d.songs) ? d.songs : (Array.isArray(d.tracks) ? d.tracks : []);
-  const breaksBy = new Map();
-  (Array.isArray(d.topic_breaks) ? d.topic_breaks : []).forEach(b => {
-    const idx = Number(b && b.after_song) - 1;
-    if (!(idx >= 0) || !b.topic) return;
-    let hs = toIds(b.hosts, 3);
-    while (hs.length < 2) { const o = otherHost(hs); if (!o) break; hs.push(o); }
-    breaksBy.set(idx, { topic: cleanHost(b.topic), hosts: hs });
-  });
-
+  const songs = Array.isArray(d.songs) ? d.songs : [];
   const recent = new Set(S.played.slice(0, 150).map(p => p.k));
   const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
-  const seen = new Set();
-  let carry = null;
+  const taken = new Set((opts.exclude || []).map(trackKey));
+  const pool = blockHosts(block).map(hostById);
   const tracks = [];
   songs.forEach((s, i) => {
-    const brk = breaksBy.get(i);
-    if (!s || !s.artist || !s.title) { if (brk) carry = brk; return; }
+    if (!s || !s.artist || !s.title) return;
     const t = { artist: String(s.artist).trim(), title: String(s.title).trim(), tag: normTag(s.tag), why: cleanHost(s.why), status: 'queued', verdict: null, videoIds: null, vi: 0 };
     const k = trackKey(t);
-    if (seen.has(k) || recent.has(k) || fb.get(k) === 'skip') { if (brk) carry = brk; return; }
-    seen.add(k);
-    t.pickedBy = nameToId(s.picked_by) || anchor;
-    let mic = toIds(s.on_mic, 2);
-    if (!mic.includes(t.pickedBy)) mic = [t.pickedBy, ...mic].slice(0, 2);
-    t.onMic = mic;
+    const isReq = !!opts.request && i === 0;
+    if (!isReq && (taken.has(k) || fb.get(k) === 'skip' || recent.has(k))) return;
+    taken.add(k);
+    t.pickedBy = nameToId(s.picked_by, pool) || pick(pool).id;
     const v = fb.get(k); if (v === 'love' || v === 'more') t.verdict = v;
-    if (carry && tracks.length) tracks[tracks.length - 1].topicAfter = carry;
-    carry = null;
-    if (brk) t.topicAfter = brk;
+    if (isReq) t.request = opts.request;
     tracks.push(t);
   });
-  if (tracks.length > 16) tracks.length = 16;
-  if (tracks.length) delete tracks[tracks.length - 1].topicAfter;
-  if (!tracks.length) throw new UserError("The song picker didn't send any new songs. Try again.");
-
-  let opening = toIds(d.opening_hosts, 3);
-  if (!opening.length) opening = [anchor];
-  if (opening.length < 2) { const o = otherHost(opening); if (o) opening.push(o); }
-  let signoff = toIds(d.signoff_hosts, 2);
-  if (!signoff.length) signoff = [anchor];
-
-  return { title: cleanHost(d.show_title) || "Today's show", tracks, opening, signoff, cost: r.cost };
+  return { tracks: tracks.slice(0, n + 1), topic: cleanHost(d.topic || ''), cost: r.cost };
 }
 
-async function genBriefing(ctx) {
-  const st = S.settings, L = st.listener || 'Lune', ST = st.station || 'the station', h = newsHost();
+/* ---------- daily briefing ---------- */
+async function genBriefing() {
+  const st = S.settings, h = newsHost(), now = new Date();
+  const dateText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const system = [
-    `You are ${h.name}, a host on ${ST}, writing the news segment for ${L}'s show. Today is ${ctx.dateText}.`,
+    `You are ${h.name}, a host on ${STN()}, writing today's hip-hop briefing for ${L()}. Today is ${dateText}.`,
     `Who you are: ${h.personality}`,
     `Focus: ${st.briefFocus}`,
     'Rules:',
     '- Use web search. Only report things you found in results from the last seven days. Do not present rumors as fact.',
     '- A speech engine reads the script out loud. No emojis, markdown, lists or em dashes.',
-    `- Use the name ${L} at most once. Never compare ${L} to other people.`,
-    '- Sound like yourself, with your personality, but keep the facts straight.'
+    `- Use the name ${L()} at most once. Never compare ${L()} to other people.`,
+    '- Sound like yourself, with your personality, but keep the facts straight. Talk like radio: short sentences, one story flowing into the next.'
   ].join('\n');
   const user = [
     "Find this week's news across hip-hop and R&B: new music, tours and shows, movies and TV, fashion and culture. Use at most 4 searches.",
     'Then reply with only a JSON object, no other text, in this shape:',
-    '{"script": "the spoken segment, 80 to 140 words. Open with a quick transition into the news and hand back to the music at the end.", "items": [{"category": "music or shows or film and tv or fashion or culture", "headline": "under 12 words", "detail": "one sentence", "url": "the source link from your search results"}]}',
+    '{"script": "the spoken segment, 90 to 150 words. Open with a quick line into the news. Do not introduce the next song, someone else does that.", "items": [{"category": "music or shows or film and tv or fashion or culture", "headline": "under 12 words", "detail": "one sentence", "url": "the source link from your search results"}]}',
     'Include 3 to 6 items.'
   ].join('\n');
   const r = await callClaude({ system, user, maxTokens: 2000, model: st.directorModel, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }] });
@@ -814,167 +933,144 @@ async function genBriefing(ctx) {
     const url = typeof i.url === 'string' && /^https?:\/\//i.test(i.url) && (r.urls.size === 0 || r.urls.has(urlKey(i.url))) ? i.url : '';
     return { category: String(i.category || 'news').toLowerCase(), headline: cleanHost(i.headline), detail: cleanHost(i.detail), url };
   });
-  return { briefing: { script, items, host: h.id }, cost: r.cost };
-}
-
-async function makeShow() {
-  if (Gen.busy) return;
-  const st = S.settings;
-  if (!st.claudeKey.trim() || !st.ytKey.trim()) { toast('Add both keys in Settings first.'); go('settings'); return; }
-  if (!activeHosts().length) { toast('Turn on at least one host in Settings.'); go('settings'); return; }
-  stopEverything();
-  S.shows.filter(s => !s.notebooked && s.log && s.log.length).slice(0, 2).forEach(s => updateNotebooks(s));
-  Gen.busy = true;
-  Gen.steps = [{ id: 'plan', label: 'Picking songs and deciding who’s on the mic', state: 'run' }];
-  if (st.briefingOn) Gen.steps.push({ id: 'brief', label: `${newsHost().name} is checking the week in hip-hop`, state: 'run' });
-  setTuning(true); go('air'); renderAll();
-  const mark = (id, state) => { const s = Gen.steps.find(x => x.id === id); if (s) s.state = state; renderGen(); };
-  const now = new Date(), ctx = buildContext(now);
-  try {
-    const planP = planShow(ctx).then(r => { mark('plan', 'done'); return r; }, e => { mark('plan', 'fail'); throw e; });
-    const briefP = st.briefingOn
-      ? genBriefing(ctx).then(r => { mark('brief', 'done'); return r; }, e => { mark('brief', 'fail'); return { error: e }; })
-      : Promise.resolve(null);
-    const [P, B] = await Promise.all([planP, briefP]);
-    const show = {
-      v: 2, id: 's' + now.getTime(), date: localDate(now), createdAt: now.toISOString(),
-      title: P.title, tracks: P.tracks, opening: P.opening, signoff: P.signoff,
-      briefing: B && !B.error ? B.briefing : null,
-      progress: 0, done: false, cost: P.cost + ((B && B.cost) || 0), log: [], notebooked: false
-    };
-    S.shows.unshift(show);
-    if (S.shows.length > 40) S.shows.length = 40;
-    S.currentShowId = show.id; UI.showOpen = true; save();
-    if (B && B.error) toast("The news didn't come through, so this show is music only. " + (B.error.message || ''), 6000);
-    else toast('Your show is ready. Tap Start the show.');
-    resolveTrack(show, 0, null, true);
-  } catch (e) {
-    toast(e.message || 'Something went wrong making the show. Try again.', 6000);
-  } finally {
-    Gen.busy = false; setTuning(false); renderAll();
-  }
+  return { date: localDate(now), script, items, host: h.id, aired: false, cost: r.cost };
 }
 
 /* ---------- host agents ---------- */
-function reactionText(t) {
-  const L = S.settings.listener || 'Lune';
-  if (t.verdict === 'skip') return `${L} hit Not for me on it`;
-  if (t.verdict === 'love') return `${L} hit Love it`;
-  if (t.verdict === 'more') return `${L} asked for more songs like it`;
-  if (t.cut) return `${L} skipped it before it finished`;
-  if (t.status === 'missing') return 'it could not be found on YouTube, so it got skipped';
-  return `${L} let it play all the way through`;
-}
-
-function previousTrack(show, segIndex) {
-  for (let j = segIndex - 1; j >= 0; j--) {
-    const s = Eng.segs[j];
-    if (s && s.kind === 'track') { const t = show.tracks[s.ti]; return t && (t.status === 'played' || t.status === 'missing') ? t : null; }
-  }
-  return null;
-}
-
+const BANNED = ['buckle up', 'dive in', 'dive into', 'tapestry', 'journey', 'without further ado', 'folks', 'stay tuned', 'hidden gem', 'sonic', 'absolute banger', "let's get into it", 'you know what time it is', 'elevate', 'vibe check', 'ladies and gentlemen'];
 function hostSystem(h) {
-  const st = S.settings, L = st.listener || 'Lune';
+  const st = S.settings;
   const crew = activeHosts().filter(x => x.id !== h.id).map(x => `- ${x.name}: ${firstSentence(x.personality)}`).join('\n');
-  const nb = (h.notebook || []).length ? h.notebook.map(n => `- ${n}`).join('\n') : '- Nothing yet. This might be one of your first shows.';
+  const nb = (h.notebook || []).length ? h.notebook.map(n => `- ${n}`).join('\n') : '- Nothing yet. You are new here.';
   return [
-    `You are ${h.name}, one of the hosts on ${st.station} (${st.freq} FM), a personal radio station made for one listener named ${L}.`,
+    `You are ${h.name}, one of the hosts on ${st.station} (${st.freq} FM), a personal radio station made for one listener named ${L()}. The station is live all day with different shows.`,
     `Who you are: ${h.personality}`,
     '',
     'The rest of the crew:',
-    crew || '- Nobody else today. You run the show solo.',
+    crew || '- Nobody else. You run the station solo.',
     '',
     `House rules: ${st.houseRules}`,
     '',
-    'How you talk:',
-    '- Say one or two sentences, under 35 words. Quick, natural radio banter.',
-    `- Speak only as ${h.name}. Never write lines for the other hosts and never put your own name in front of your line.`,
-    `- React to what was just said, and to how ${L} reacted to the last song. Silly is welcome. Stay in character.`,
+    'How real radio sounds:',
+    "- Talk, don't write. Contractions, short sentences, fragments are fine.",
+    '- One thought per line. Usually 8 to 28 words.',
+    '- If someone just spoke, answer them first: agree, push back, roast them, or add one specific detail. Then move it forward.',
+    '- Never announce a handoff ("over to you", "take it away", "what do you think, Dez?"). Just talk to the others by name when it is natural.',
+    '- No greetings unless you are opening a show. No goodbyes unless you are closing one.',
+    `- Never use these: ${BANNED.join(', ')}.`,
     '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.',
-    '- Any song fact you state has to be true. If you are not sure, make a joke instead of stating a fact.',
-    `- Call ${L} only by that name. Never compare ${L} to other people and never tell ${L} to hurry.`,
+    '- Any fact about a song or artist has to be true. If you are not sure, go for a joke or an opinion instead.',
+    `- Call ${L()} only by that name. Never compare ${L()} to other people and never tell ${L()} to hurry.`,
+    `- Speak only as ${h.name}. Never write lines for the others and never put your name in front of your line.`,
+    '',
+    'Good: "Okay that bridge? He went quiet for eight bars and it still hit harder than the hook."',
+    'Bad: "What a beautiful song! Let\'s dive into the next track, folks!"',
     '',
     'Your notebook from past shows:',
     nb
   ].join('\n');
 }
 
-function lineContext(show, seg, segIndex, h, turn, priorLines) {
-  const st = S.settings, L = st.listener || 'Lune', now = new Date();
-  const crew = seg.hosts.map(hostName);
-  const others = seg.hosts.filter(id => id !== h.id).map(hostName);
-  const out = [`It's ${now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}, ${partOfDay(now)}. You're live on today's show, "${show.title}".`];
-  out.push(`On the mic right now: ${crew.join(', ')}.`);
-  const prev = previousTrack(show, segIndex);
-  if (prev) out.push(`The last song was ${prev.title} by ${prev.artist}, ${hostName(prev.pickedBy)}'s pick. ${reactionText(prev)}.`);
-  if (seg.type === 'opening') {
-    out.push(`Your job right now: open the show. Greet ${L} and get the energy going.${show.briefing ? ` Don't read any news; ${hostName(show.briefing.host)} has the news right after this.` : ''}`);
-  } else if (seg.type === 'leadin') {
-    const t = show.tracks[seg.ti];
-    out.push(`Your job right now: bring in the next song, ${t.title} by ${t.artist}. It's ${hostName(t.pickedBy)}'s pick (${t.tag}${t.why ? `: ${t.why}` : ''}).`);
-    if (t.verdict === 'love' || t.verdict === 'more') out.push(`${L} has loved this one before.`);
-  } else if (seg.type === 'topic') {
-    out.push(`Your job right now: a quick break from the music. Go off on this topic: ${seg.topic} Be opinionated and silly. This is banter, not news, so don't state recent facts.`);
-  } else if (seg.type === 'signoff') {
-    out.push(`Your job right now: close out the show and say goodbye to ${L}.`);
+function reactionText(t) {
+  if (!t) return '';
+  if (t.verdict === 'skip') return `${L()} hit Not for me and skipped it`;
+  if (t.verdict === 'love') return `${L()} hit Love it`;
+  if (t.verdict === 'more') return `${L()} asked for more songs like it`;
+  if (t.cut) return `${L()} skipped it before it finished`;
+  return '';
+}
+
+function turnPrompt(h, job) {
+  const { kind, ctx, prior, turn, total, track } = job;
+  const block = ctx.block;
+  const out = [`It's ${ctx.dayText}, about ${ctx.clock}. You're live on ${block.name}. ${firstSentence(block.about)}`];
+  out.push(`On the mic for this break: ${listJoin(job.cast.map(hostName))}.`);
+  if (ctx.prev) {
+    const re = reactionText(ctx.prev);
+    out.push(`The song that just played: ${ctx.prev.title} by ${ctx.prev.artist}, ${hostName(ctx.prev.pickedBy)}'s pick.${re ? ` ${re}.` : ''}`);
   }
-  if (priorLines.length) out.push('', 'Said so far in this moment:', ...priorLines.map(l => `${hostName(l.host)}: ${l.say}`));
-  else if (seg.type !== 'opening' && Eng.lastLine) out.push('', `Last thing said on air: ${hostName(Eng.lastLine.host)}: ${Eng.lastLine.say}`);
-  const isLast = turn + 1 >= seg.max || !others.length;
-  out.push('', `This is line ${turn + 1} of at most ${seg.max}.`);
-  if (isLast) out.push('You have the final line.');
-  else out.push(`You can hand off to ${others.join(' or ')}, or end the moment yourself.`);
-  if (seg.type === 'leadin') out.push('Whoever ends this moment must introduce the song by its title and artist.');
-  if (seg.type === 'topic') out.push('Whoever ends this moment wraps it up and gets back to the music.');
-  out.push('', 'Reply with only JSON: {"say": "your line", "hand_to": "a host name or none"}');
+  const final = turn === total - 1;
+  const others = job.cast.filter(id => id !== h.id).map(hostName);
+  if (kind === 'open') {
+    out.push(`This break: you're opening ${block.name}.${ctx.firstToday ? ` It's the first show ${L()} has tuned into today.` : ''} Say the show name once, greet ${L()} quick, and get some energy going between the hosts. Mention the time once, like a radio host would.`);
+  } else if (kind === 'welcome') {
+    out.push(`This break: ${L()} just tuned back in to ${block.name}. A quick welcome back, no big intro.`);
+  } else if (kind === 'handoff') {
+    const from = ctx.fromBlock;
+    if (h.id === job.cast[0] && turn === 0 && from) out.push(`This break: your show, ${from.name}, is over, and ${block.name} with ${listJoin(blockHosts(block).map(hostName))} starts now. Send it off in one line and pass it over. Mention the time.`);
+    else out.push(`This break: ${block.name} is starting right now${from ? `, taking over from ${from.name}` : ''}. Say the show name once and set the mood for it.`);
+  } else if (kind === 'news') {
+    out.push(`This break: ${hostName(ctx.newsHost)} just read today's hip-hop briefing on air: "${ctx.briefing.script}" React to one of those stories in your own way.`);
+  } else if (kind === 'topic') {
+    out.push(`This break: a quick break from the music. Topic: ${ctx.topic} Have a real opinion, be funny, go back and forth. It's banter, not news, so don't state recent facts.`);
+  } else if (kind === 'banter') {
+    out.push(`This break: talk about the song that just played${ctx.prev ? '' : ' or anything on your mind'}, then get to the next one. Talk to each other, not only to ${L()}.`);
+  } else if (kind === 'intro') {
+    out.push(`This break: one quick line into the next song. You can react to the last one in a few words first.`);
+  } else if (kind === 'request') {
+    out.push(`This break: ${L()} called the request line asking for "${track && track.request}". Shout ${L()} out for it.`);
+  }
+  if (track && (final || kind === 'intro' || kind === 'request')) {
+    out.push(`The next song: ${track.title} by ${track.artist}, ${hostName(track.pickedBy)}'s pick (${track.tag}${track.why ? `: ${track.why}` : ''}).`);
+    if (track.verdict === 'love' || track.verdict === 'more') out.push(`${L()} has loved this one before.`);
+  }
+  if (ctx.recent.length) out.push('', 'Said on air in the last few minutes, so do not repeat any of it:', ...ctx.recent.map(l => `${hostName(l.host)}: ${l.say}`));
+  if (prior.length) out.push('', 'Said so far in this break:', ...prior.map(l => `${hostName(l.host)}: ${l.say}`));
+  out.push('');
+  if (final) {
+    out.push(track
+      ? `You have the last line of this break. It plays over the start of the song, so keep it under 22 words and end by saying the song title and artist.`
+      : 'You have the last line of this break. Keep it under 22 words.');
+  } else {
+    out.push(`Someone else talks after you, so don't bring in a song yet. Keep it under 28 words.${others.length ? ` Pick who should talk next: ${others.join(' or ')}.` : ''}`);
+  }
+  out.push('Reply with only JSON: {"say": "your line", "next": "host name or none"}');
   return out.join('\n');
 }
 
 function parseLine(text, h) {
-  let say = '', hand = '';
-  try { const d = extractJSON(text); say = String(d.say || ''); hand = String(d.hand_to || ''); }
-  catch (e) { say = String(text || '').replace(/[{}]/g, '').replace(/"?say"?\s*:\s*/i, '').replace(/"?hand_to"?\s*:.*$/is, ''); }
+  let say = '', next = '';
+  try { const d = extractJSON(text); say = String(d.say || ''); next = String(d.next || d.hand_to || ''); }
+  catch (e) { say = String(text || '').replace(/[{}]/g, '').replace(/"?say"?\s*:\s*/i, '').replace(/"?(next|hand_to)"?\s*:.*$/is, ''); }
   say = cleanHost(say.replace(/^["']|["']$/g, '').replace(new RegExp('^' + reEsc(h.name) + '\\s*:\\s*', 'i'), '').replace(/\[[^\]]*\]|\*[^*]*\*/g, ''));
-  return { say, hand };
+  return { say, next };
 }
 
-async function genLine(show, seg, segIndex, hostId, turn, priorLines) {
+async function genTurn(hostId, job) {
   const h = hostById(hostId) || anchorHost();
-  try {
-    const r = await callClaude({ system: hostSystem(h), user: lineContext(show, seg, segIndex, h, turn, priorLines), maxTokens: 220, model: h.model || HAIKU });
-    show.cost = (show.cost || 0) + r.cost;
-    const { say, hand } = parseLine(r.text, h);
-    if (!say) return { error: new UserError('empty') };
-    const isLast = turn + 1 >= seg.max;
-    let next = isLast ? null : nameToId(hand);
-    if (next === h.id || (next && !seg.hosts.includes(next))) next = null;
-    return { host: h.id, say, next };
-  } catch (e) { return { error: e }; }
+  const r = await callClaude({ system: hostSystem(h), user: turnPrompt(h, job), maxTokens: 200, model: h.model || HAIKU });
+  const { say, next } = parseLine(r.text, h);
+  if (!say) throw new UserError('empty');
+  return { host: h.id, say, next: nameToId(next), cost: r.cost };
 }
 
-async function updateNotebooks(show) {
-  if (show.notebooked || !show.log || !show.log.length) return;
-  show.notebooked = true; saveSoon();
-  const st = S.settings, L = st.listener || 'Lune';
-  const reactions = show.tracks.filter(t => t.status === 'played' || t.verdict).map(t => `- ${t.title} by ${t.artist}, ${hostName(t.pickedBy)}'s pick: ${reactionText(t)}`).join('\n') || '- No songs got played.';
-  const spoke = [...new Set(show.log.map(l => l.h))];
+const mentionsTrack = (say, t) => {
+  const s = norm(say), title = norm(String(t.title).replace(/\s*[\(\[](feat|ft|with)[^\)\]]*[\)\]]/i, ''));
+  return !!title && s.includes(title);
+};
+
+async function updateNotebooks(session) {
+  if (!session || session.notebooked || !session.log || session.log.length < 4) return;
+  session.notebooked = true; saveSoon();
+  const st = S.settings;
+  const reactions = session.tracks.map(t => `- ${t.title} by ${t.artist}, ${hostName(t.pickedBy)}'s pick${reactionText(t) ? `: ${reactionText(t)}` : ''}`).join('\n') || '- No songs got played.';
+  const spoke = [...new Set(session.log.map(l => l.h))];
   await Promise.all(spoke.map(async id => {
     const h = hostById(id); if (!h) return;
-    const mine = show.log.filter(l => l.h === id).slice(-20).map(l => `- ${l.t}`).join('\n');
-    const others = show.log.filter(l => l.h !== id).slice(-12).map(l => `- ${hostName(l.h)}: ${l.t}`).join('\n');
+    const mine = session.log.filter(l => l.h === id).slice(-20).map(l => `- ${l.t}`).join('\n');
+    const others = session.log.filter(l => l.h !== id).slice(-12).map(l => `- ${hostName(l.h)}: ${l.t}`).join('\n');
     const user = [
-      `The show "${show.title}" just ended.`, '', 'What you said:', mine, '', 'Some of what the others said:', others || '- Nothing.', '',
-      `How ${L} reacted to the songs:`, reactions, '',
+      `Your stretch on ${session.name} just ended.`, '', 'What you said:', mine, '', 'Some of what the others said:', others || '- Nothing.', '',
+      `The songs and how ${L()} reacted:`, reactions, '',
       'Your notebook right now:', (h.notebook || []).map(n => `- ${n}`).join('\n') || '- Empty.', '',
-      `Update your notebook so the next show feels like a continuation: running jokes, bits with the other hosts, your opinions, and what ${L} loves or skips from your picks. Keep at most 8 notes, each under 15 words. Drop stale ones. Write in your own voice.`,
+      `Update your notebook so the next show feels like a continuation: running jokes, bits with the other hosts, your opinions, and what ${L()} loves or skips from your picks. Keep at most 8 notes, each under 15 words. Drop stale ones. Write in your own voice.`,
       'Reply with only JSON: {"notebook": ["note", "note"]}'
     ].join('\n');
     try {
       const r = await callClaude({ system: `You are ${h.name}, a host on ${st.station}. Who you are: ${h.personality}`, user, maxTokens: 500, model: h.model || HAIKU });
       const d = extractJSON(r.text);
       if (Array.isArray(d.notebook)) h.notebook = d.notebook.map(cleanHost).filter(Boolean).slice(0, 8);
-      show.cost = (show.cost || 0) + r.cost;
+      session.cost = (session.cost || 0) + r.cost;
     } catch (e) {}
   }));
   save();
@@ -985,11 +1081,12 @@ async function updateNotebooks(show) {
 function ytErr(status, data) {
   const reason = (data && data.error && data.error.errors && data.error.errors[0] && data.error.errors[0].reason) || '';
   const msg = (data && data.error && data.error.message) || '';
-  if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') return "Today's YouTube lookups are used up. They reset at midnight Pacific time.";
-  if (reason === 'keyInvalid' || /API key not valid/i.test(msg)) return 'YouTube rejected your API key. Copy it again from Google Cloud and paste it in Settings.';
-  if (reason === 'accessNotConfigured' || /has not been used|is disabled/i.test(msg)) return 'YouTube Data API v3 is not turned on for your key. Turn it on in Google Cloud under APIs and Services, Library.';
-  if (/refer/i.test(msg) || reason === 'ipRefererBlocked' || reason === 'forbidden') return "Your YouTube key is locked to a different website. Add this page's address to the key's website restrictions.";
-  return 'YouTube search failed' + (msg ? ': ' + msg : '.');
+  if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') return { msg: "Today's YouTube lookups are used up. They reset at midnight Pacific time.", quota: true };
+  if (reason === 'keyInvalid' || /API key not valid/i.test(msg)) return { msg: 'YouTube rejected your API key. Copy it again from Google Cloud and paste it in Settings.' };
+  if (reason === 'accessNotConfigured' || /has not been used|is disabled/i.test(msg)) return { msg: 'YouTube Data API v3 is not turned on for your key. Turn it on in Google Cloud under APIs and Services, Library.' };
+  if (/refer/i.test(msg) || reason === 'ipRefererBlocked') return { msg: "Your Google key is locked to a different website. Add this page's address to the key's website restrictions." };
+  if (/blocked/i.test(msg) || reason === 'forbidden') return { msg: 'Your Google key is limited to other APIs. Edit the key in Google Cloud and add YouTube Data API v3 to its API restrictions.' };
+  return { msg: 'YouTube search failed' + (msg ? ': ' + msg : '.') };
 }
 
 const BAD_WORDS = ['live', 'cover', 'sped up', 'slowed', 'reverb', 'reaction', 'karaoke', 'instrumental', '8d', 'nightcore', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'chopped', 'review', 'piano'];
@@ -1012,10 +1109,12 @@ function scoreVideo(v, artist, title) {
   return sc;
 }
 
+const YTQ = { quotaDay: null };
 const inflight = new Map();
 async function findVideos(artist, title) {
   const k = norm(artist) + '|' + norm(title);
   if (S.ytCache[k] && S.ytCache[k].length) return S.ytCache[k];
+  if (YTQ.quotaDay === today()) return [];
   if (inflight.has(k)) return inflight.get(k);
   const p = searchVideos(artist, title, k);
   inflight.set(k, p);
@@ -1027,9 +1126,13 @@ async function searchVideos(artist, title, k) {
   const qs = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}`, key });
   let res;
   try { res = await fetch('https://www.googleapis.com/youtube/v3/search?' + qs); }
-  catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection.", { fatal: true }); }
+  catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection."); }
   const data = await res.json().catch(() => null);
-  if (!res.ok) throw new UserError(ytErr(res.status, data), { fatal: true });
+  if (!res.ok) {
+    const e = ytErr(res.status, data);
+    if (e.quota) { if (YTQ.quotaDay !== today()) toast("Today's YouTube lookups ran out, so the station will stick to songs it already found until they reset.", 7000); YTQ.quotaDay = today(); return []; }
+    throw new UserError(e.msg, { fatal: true });
+  }
   const vids = (data.items || []).filter(it => it.id && it.id.videoId)
     .map(it => ({ id: it.id.videoId, title: decode(it.snippet.title), channel: decode(it.snippet.channelTitle || '') }))
     .map(v => ({ ...v, score: scoreVideo(v, artist, title) }))
@@ -1039,20 +1142,29 @@ async function searchVideos(artist, title, k) {
   if (vids.length) {
     S.ytCache[k] = vids;
     const keys = Object.keys(S.ytCache);
-    if (keys.length > 600) keys.slice(0, 150).forEach(x => delete S.ytCache[x]);
+    if (keys.length > 800) keys.slice(0, 200).forEach(x => delete S.ytCache[x]);
     saveSoon();
   }
   return vids;
 }
+async function resolveTrack(t) {
+  if (!t) return false;
+  if (t.videoIds && t.videoIds.length) return true;
+  if (t.status === 'missing') return false;
+  const ids = await findVideos(t.artist, t.title);
+  if (ids.length) { t.videoIds = ids; t.vi = 0; return true; }
+  t.status = 'missing';
+  return false;
+}
 
-/* ---------- player ---------- */
+/* ---------- YouTube player ---------- */
 let player = null, playerReady = null;
 function ensurePlayer() {
   if (playerReady) return playerReady;
   playerReady = new Promise((resolve, reject) => {
     const to = setTimeout(() => { playerReady = null; reject(new Error('timeout')); }, 15000);
     const make = () => {
-      player = new YT.Player('yt', {
+      player = new window.YT.Player('yt', {
         width: '100%', height: '100%',
         playerVars: { playsinline: 1, rel: 0, autoplay: 0, origin: location.origin },
         events: { onReady: () => { clearTimeout(to); resolve(player); }, onStateChange: onYTState, onError: onYTError }
@@ -1070,29 +1182,123 @@ function ensurePlayer() {
   });
   return playerReady;
 }
+const Vid = { pending: null, vol: 100, fadeT: null };
 function onYTState(e) {
-  const st = e.data;
-  if (st === 1) { $('#tapHint').hidden = true; if (Eng.pending) { Eng.paused = false; setOnAir(true); renderNowOnly(); } }
-  else if (st === 2) { if (Eng.pending) { Eng.paused = true; setOnAir(false); renderNowOnly(); } }
-  else if (st === 0) { if (Eng.pending) Eng.pending.resolve('ended'); }
+  const st = e.data, p = Vid.pending;
+  if (!p) return;
+  if (st === 1) {
+    $('#tapHint').hidden = true; p.markStarted();
+    if (Eng.paused) { Eng.paused = false; setOnAir(true); keepAwake(true); renderAll(); } // tapped play on the video itself
+  } else if (st === 2) {
+    // paused from the video's own controls
+    if (!Eng.paused && !p.fading && Date.now() - p.loadedAt > 1500) { Eng.paused = true; Eng.pausedAt = Date.now(); stopVoice(); Eng.cutTalk = true; setOnAir(false); renderAll(); }
+  } else if (st === 0) p.finish('ended');
 }
-function onYTError() { if (Eng.pending) Eng.pending.resolve('error'); }
-
-function playVideo(id) {
+function onYTError() { if (Vid.pending) Vid.pending.finish('error'); }
+function setVol(v) { Vid.vol = Math.max(0, Math.min(100, Math.round(v))); try { player && player.setVolume(Vid.vol); } catch (e) {} }
+function fadeTo(target, ms) {
+  clearInterval(Vid.fadeT);
   return new Promise(resolve => {
-    if (Eng.pending) Eng.pending.resolve('aborted');
-    const p = { id, resolve: r => { if (Eng.pending === p) Eng.pending = null; clearTimeout(Eng.watch); resolve(r); } };
-    Eng.pending = p;
-    player.loadVideoById({ videoId: id });
-    try { player.setVolume(100); } catch (e) {}
-    clearTimeout(Eng.watch);
-    Eng.watch = setTimeout(() => {
-      try { const s = player.getPlayerState(); if (Eng.pending === p && s !== 1 && s !== 3) $('#tapHint').hidden = false; } catch (e) {}
-    }, 5000);
+    const from = Vid.vol, steps = Math.max(1, Math.round(ms / 60));
+    let i = 0;
+    if (ms <= 0) { setVol(target); resolve(); return; }
+    Vid.fadeT = setInterval(() => {
+      i++;
+      setVol(from + (target - from) * (i / steps));
+      if (i >= steps) { clearInterval(Vid.fadeT); Vid.fadeT = null; resolve(); }
+    }, 60);
   });
+}
+function playVideo(id, startVol) {
+  if (Vid.pending) Vid.pending.finish('aborted');
+  let resolveDone, resolveStarted;
+  const done = new Promise(r => resolveDone = r);
+  const started = new Promise(r => resolveStarted = r);
+  const p = {
+    id, done, started, fading: false, isStarted: false, loadedAt: Date.now(),
+    markStarted() { if (!p.isStarted) { p.isStarted = true; resolveStarted(true); } },
+    finish(r) { if (Vid.pending === p) Vid.pending = null; clearTimeout(p.watch); p.markStarted(); resolveDone(r); }
+  };
+  Vid.pending = p;
+  clearInterval(Vid.fadeT);
+  setVol(startVol);
+  player.loadVideoById({ videoId: id });
+  setVol(startVol);
+  p.watch = setTimeout(() => { try { const s = player.getPlayerState(); if (Vid.pending === p && s !== 1 && s !== 3) $('#tapHint').hidden = false; } catch (e) {} }, 6000);
+  return p;
+}
+function vidTimes() {
+  try { const d = player.getDuration(), c = player.getCurrentTime(); return d > 0 ? { d, c, left: d - c } : null; } catch (e) { return null; }
 }
 
 /* ---------- voices ---------- */
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+const vox = new Audio();
+vox.preload = 'auto';
+let actx = null;
+const Voice = { naturalBroken: null, warned: false, cancel: null };
+const voiceMode = () => S.settings.voiceMode || 'natural';
+const useNatural = () => voiceMode() === 'natural' && !Voice.naturalBroken;
+const gvoiceOf = h => (h && h.gvoice) || 'Charon';
+
+function unlockAudio() {
+  try { vox.src = SILENT_WAV; const p = vox.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  try {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+    if (actx && actx.state === 'suspended') actx.resume();
+  } catch (e) {}
+  try { if ('speechSynthesis' in window && voiceMode() === 'phone') { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+}
+
+function ttsErr(status, data) {
+  const msg = (data && data.error && data.error.message) || '';
+  const reason = JSON.stringify((data && data.error && data.error.details) || '');
+  if (/billing/i.test(msg + reason)) return 'Google needs billing turned on for natural voices, even on the free tier. Add it in Google Cloud under Billing.';
+  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg + reason)) return 'The Cloud Text-to-Speech API is not turned on in your Google project. Turn it on under APIs and Services, Library.';
+  if (/API_KEY_SERVICE_BLOCKED|are blocked/i.test(msg + reason)) return 'Your Google key is limited to other APIs. Edit the key and add Cloud Text-to-Speech API to its API restrictions.';
+  if (/referer|referrer/i.test(msg + reason)) return "Your Google key is locked to a different website. Add this page's address to the key's website restrictions.";
+  if (/API key not valid/i.test(msg)) return 'Google rejected the voice key. Copy it again and paste it in Settings.';
+  if (status === 400 && /voice/i.test(msg)) return "That natural voice isn't available. Pick another one in the host's settings.";
+  if (status === 429) return 'Google says too many voice requests right now.';
+  return 'Natural voices failed' + (msg ? ': ' + msg : '.');
+}
+const ttsCache = new Map();
+async function synth(text, h) {
+  const key = (S.settings.ttsKey || S.settings.ytKey || '').trim();
+  if (!key) throw new UserError('Add a Google key for natural voices.', { fatal: true });
+  const name = `en-US-Chirp3-HD-${gvoiceOf(h)}`, rate = Math.min(1.3, Math.max(0.8, Number(h && h.grate) || 1));
+  const ck = name + '|' + rate + '|' + text;
+  if (ttsCache.has(ck)) return ttsCache.get(ck);
+  let res;
+  try {
+    res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=' + encodeURIComponent(key), {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ input: { text }, voice: { languageCode: 'en-US', name }, audioConfig: { audioEncoding: 'MP3', speakingRate: rate } })
+    });
+  } catch (e) { throw new UserError("Couldn't reach Google for the voices."); }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new UserError(ttsErr(res.status, data), { fatal: res.status === 400 || res.status === 403 });
+  if (!data || !data.audioContent) throw new UserError('Natural voices sent back nothing.');
+  const bin = atob(data.audioContent), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+  ttsCache.set(ck, url);
+  if (ttsCache.size > 80) { const [k0, u0] = ttsCache.entries().next().value; ttsCache.delete(k0); setTimeout(() => URL.revokeObjectURL(u0), 60000); }
+  return url;
+}
+function naturalFailed(e) {
+  if (e && e.fatal && !Voice.naturalBroken) {
+    Voice.naturalBroken = e.message;
+    toast(`${e.message} Using phone voices for now.`, 8000);
+  }
+}
+// Kick off audio for a line as soon as the words exist, so it's ready by air time.
+function prepAudio(line) {
+  if (line.audio || !useNatural()) return line;
+  line.audio = synth(line.say, hostById(line.host)).catch(e => { naturalFailed(e); return null; });
+  return line;
+}
+
 function englishVoices() {
   if (!('speechSynthesis' in window)) return [];
   const vs = speechSynthesis.getVoices();
@@ -1101,7 +1307,7 @@ function englishVoices() {
   const rank = v => (/natural|neural|premium|enhanced/i.test(v.name) ? 0 : /google/i.test(v.name) ? 1 : 2);
   return list.slice().sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
-function voiceFor(h) {
+function phoneVoiceFor(h) {
   const vs = englishVoices();
   if (!vs.length || !h) return null;
   if (h.voiceName) { const v = vs.find(x => x.name === h.voiceName); if (v) return v; }
@@ -1118,47 +1324,73 @@ function chunks(text) {
   if (cur) out.push(cur);
   return out;
 }
-function speak(text, hostId, my) {
+const readTime = text => Math.min(20000, 900 + words(text) * 330);
+
+function speakPhone(text, h) {
   return new Promise(resolve => {
     let done = false, t1 = null;
-    const finish = () => { if (done) return; done = true; clearTimeout(t1); if (Eng.cancelTalk === finish) Eng.cancelTalk = null; resolve(); };
-    Eng.cancelTalk = finish;
-    const h = hostById(hostId);
-    const useVoice = S.settings.voiceOn && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
-    if (!useVoice) {
-      const words = String(text).split(/\s+/).length;
-      t1 = setTimeout(finish, Math.min(16000, 1600 + words * 280));
-      return;
-    }
-    const parts = chunks(text), v = voiceFor(h), rate = Number(h && h.rate) || 1, pitch = Number(h && h.pitch) || 1;
+    const finish = () => { if (done) return; done = true; clearTimeout(t1); if (Voice.cancel === finish) Voice.cancel = null; resolve(); };
+    Voice.cancel = () => { try { speechSynthesis.cancel(); } catch (e) {} finish(); };
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') { t1 = setTimeout(finish, readTime(text)); return; }
+    const parts = chunks(text), v = phoneVoiceFor(h), rate = Number(h && h.rate) || 1, pitch = Number(h && h.pitch) || 1;
     let idx = 0;
     try { speechSynthesis.cancel(); } catch (e) {}
     const next = () => {
       if (done) return;
-      if (my !== Eng.token || idx >= parts.length) return finish();
+      if (idx >= parts.length) return finish();
       const u = new SpeechSynthesisUtterance(parts[idx++]);
       if (v) { u.voice = v; u.lang = v.lang; } else u.lang = 'en-US';
       u.rate = rate; u.pitch = pitch;
-      u.onend = next;
-      u.onerror = finish;
-      try { speechSynthesis.speak(u); }
-      catch (e) { clearTimeout(t1); t1 = setTimeout(finish, Math.min(16000, 1600 + String(text).split(/\s+/).length * 280)); }
+      u.onend = next; u.onerror = finish;
+      try { speechSynthesis.speak(u); } catch (e) { clearTimeout(t1); t1 = setTimeout(finish, readTime(text)); }
     };
     t1 = setTimeout(finish, 6000 + String(text).length * 110 / rate);
-    setTimeout(next, 60);
+    setTimeout(next, 40);
   });
 }
-function unlockAudio() {
-  try { if ('speechSynthesis' in window && S.settings.voiceOn) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+function playUrl(url) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = ok => { if (done) return; done = true; vox.onended = vox.onerror = null; clearTimeout(t); if (Voice.cancel === cancel) Voice.cancel = null; resolve(ok); };
+    const cancel = () => { try { vox.pause(); } catch (e) {} finish(true); };
+    Voice.cancel = cancel;
+    vox.onended = () => finish(true);
+    vox.onerror = () => finish(false);
+    const t = setTimeout(() => finish(true), 60000);
+    vox.src = url;
+    const p = vox.play();
+    if (p && p.catch) p.catch(() => finish(false));
+  });
 }
-function previewHost(h) {
-  if (!('speechSynthesis' in window)) { toast("This browser can't read text out loud."); return; }
-  speechSynthesis.cancel();
-  const st = S.settings, v = voiceFor(h);
-  const u = new SpeechSynthesisUtterance(`What's good ${st.listener || 'Lune'}, it's ${h.name}, live on ${st.station || 'Lune FM'}.`);
-  if (v) { u.voice = v; u.lang = v.lang; }
-  u.rate = Number(h.rate) || 1; u.pitch = Number(h.pitch) || 1;
-  speechSynthesis.speak(u);
+async function voiceOut(line) {
+  const h = hostById(line.host);
+  const mode = voiceMode();
+  if (mode === 'off') { await new Promise(r => { const t = setTimeout(r, readTime(line.say)); Voice.cancel = () => { clearTimeout(t); r(); }; }); Voice.cancel = null; return; }
+  if (mode === 'natural' && !Voice.naturalBroken) {
+    if (!line.audio) prepAudio(line);
+    const url = line.audio ? await Promise.race([line.audio, sleep(6000).then(() => null)]) : null;
+    if (url && await playUrl(url)) return;
+  }
+  await speakPhone(line.say, h);
+}
+function stopVoice() { try { speechSynthesis.cancel(); } catch (e) {} if (Voice.cancel) Voice.cancel(); try { vox.pause(); } catch (e) {} }
+
+// A short chime between segments, made on the spot so there's nothing to download.
+function sting() {
+  if (!actx || actx.state !== 'running') return sleep(250);
+  try {
+    const t0 = actx.currentTime + 0.03, master = actx.createGain();
+    master.gain.value = 0.11; master.connect(actx.destination);
+    [392, 493.88, 587.33, 739.99].forEach((f, i) => {
+      const o = actx.createOscillator(), o2 = actx.createOscillator(), g = actx.createGain(), at = t0 + i * 0.085;
+      o.type = 'sine'; o.frequency.value = f; o2.type = 'triangle'; o2.frequency.value = f * 2;
+      const g2 = actx.createGain(); g2.gain.value = 0.18;
+      g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, at + 0.015); g.gain.exponentialRampToValueAtTime(0.0008, at + 1.25);
+      o.connect(g); o2.connect(g2).connect(g); g.connect(master);
+      o.start(at); o2.start(at); o.stop(at + 1.3); o2.stop(at + 1.3);
+    });
+  } catch (e) {}
+  return sleep(800);
 }
 
 /* ---------- wake lock ---------- */
@@ -1169,246 +1401,552 @@ async function keepAwake(on) {
     else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
   } catch (e) {}
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Eng.running) keepAwake(true); });
 
-/* ---------- show engine ---------- */
-function buildSegments(show) {
-  if (show.v !== 2) {
-    // shows made before the host crew existed
-    const a = anchorHost().id;
-    const segs = [{ kind: 'say', text: show.intro || `You're tuned in to ${S.settings.station}.`, host: a, label: 'Opening' }];
-    if (show.briefing && show.briefing.script) segs.push({ kind: 'say', text: show.briefing.script, host: a, label: 'The week in hip-hop' });
-    show.tracks.forEach((t, ti) => {
-      if (t.lead_in) segs.push({ kind: 'say', text: t.lead_in, host: a, label: 'On the mic', ti });
-      segs.push({ kind: 'track', ti });
-    });
-    if (show.outro) segs.push({ kind: 'say', text: show.outro, host: a, label: 'Sign-off' });
-    return segs;
-  }
-  const live = ids => ids.filter(id => hostById(id) && hostById(id).enabled);
-  const fallback = ids => { const l = live(ids || []); return l.length ? l : [anchorHost().id]; };
-  const maxFor = (n, many) => n > 1 ? many : 1;
-  const opening = fallback(show.opening);
-  const segs = [{ kind: 'talk', type: 'opening', hosts: opening, max: maxFor(opening.length, Math.min(4, opening.length + 1)), label: 'Opening' }];
-  if (show.briefing && show.briefing.script) segs.push({ kind: 'say', text: show.briefing.script, host: fallback([show.briefing.host])[0], label: 'The week in hip-hop' });
-  show.tracks.forEach((t, ti) => {
-    const mic = fallback(t.onMic || [t.pickedBy]);
-    segs.push({ kind: 'talk', type: 'leadin', ti, hosts: mic, max: maxFor(mic.length, 3), label: 'On the mic' });
-    segs.push({ kind: 'track', ti });
-    if (t.topicAfter && ti < show.tracks.length - 1) {
-      const th = fallback(t.topicAfter.hosts);
-      segs.push({ kind: 'talk', type: 'topic', topic: t.topicAfter.topic, hosts: th, max: maxFor(th.length, 6), label: 'Off topic' });
-    }
-  });
-  const so = fallback(show.signoff);
-  segs.push({ kind: 'talk', type: 'signoff', hosts: so, max: maxFor(so.length, 2), label: 'Sign-off' });
-  return segs;
+/* ---------- the station engine ---------- */
+const DUCK = 20;       // song volume while a host talks over the intro
+const FADE_S = 4;      // seconds of fade at the end of a song
+const Eng = {
+  on: false, paused: false, pausedAt: 0, token: 0,
+  block: null, session: null,
+  upcoming: [], cur: null,
+  prep: null, planP: null, nextPlan: null, nextPlanP: null,
+  needOpen: null, slot: 0, lastKind: null,
+  recent: [], caption: [], speaking: null, cutTalk: false,
+  status: '', error: null, topic: '', requests: [],
+  briefP: null, briefTried: null, introP: null, planFails: 0, poll: null
+};
+const live = my => Eng.on && my === Eng.token;
+spendHook = c => { if (Eng.session) Eng.session.cost = (Eng.session.cost || 0) + c; };
+
+const stripTrack = t => ({ artist: t.artist, title: t.title, tag: t.tag, why: t.why, pickedBy: t.pickedBy, request: t.request || null, verdict: t.verdict || null, videoIds: t.videoIds || null, vi: 0, status: 'queued' });
+function persistQueue() {
+  S.queue = Eng.block ? { blockId: Eng.block.id, date: today(), tracks: Eng.upcoming.map(stripTrack), topic: Eng.topic || '' } : S.queue;
+  saveSoon();
 }
-
-async function resolveTrack(show, ti, my, silent) {
-  const t = show.tracks[ti];
-  if (!t) return false;
-  if (t.videoIds && t.videoIds.length) return true;
-  if (t.status === 'missing') return false;
-  try {
-    const ids = await findVideos(t.artist, t.title);
-    if (ids.length) { t.videoIds = ids; t.vi = 0; saveSoon(); return true; }
-    t.status = 'missing'; saveSoon(); if (!silent) renderAll();
-    return false;
-  } catch (e) {
-    if (silent) return false;
-    if (e.fatal) { stopRun(e.message); return false; }
-    t.status = 'missing'; saveSoon(); renderAll();
-    return false;
-  }
+const verdictOf = t => { const f = S.feedback.find(x => x.k === trackKey(t)); return f ? f.verdict : null; };
+const recentlyPlayed = t => S.played.slice(0, 60).some(p => p.k === trackKey(t));
+const todaysTracks = () => S.sessions.filter(s => s.date === today()).flatMap(s => s.tracks);
+function dropUpcoming(t) {
+  Eng.upcoming = Eng.upcoming.filter(x => x !== t);
+  if (Eng.prep && Eng.prep.track === t) Eng.prep = null;
+  persistQueue(); renderAll();
 }
-
 function notePlayed(t) {
   const k = trackKey(t);
   S.played = [{ k, artist: t.artist, title: t.title, at: Date.now() }, ...S.played.filter(p => p.k !== k)].slice(0, 300);
 }
 
-function logLine(show, l) {
-  if (!show.log) show.log = [];
-  show.log.push({ h: l.host, t: l.say });
-  if (show.log.length > 300) show.log.splice(0, show.log.length - 300);
-  Eng.lastLine = l;
+/* sessions: one history entry per stretch of a show */
+function openSession(block) {
+  const s0 = S.sessions[0];
+  if (s0 && s0.showId === block.id && s0.date === today() && Date.now() - new Date(s0.lastAt || s0.startedAt).getTime() < 3 * 3600e3) {
+    s0.notebooked = false; return s0;
+  }
+  const now = new Date().toISOString();
+  const s = { id: 's' + Date.now(), showId: block.id, name: block.name, date: today(), startedAt: now, lastAt: now, tracks: [], log: [], cost: 0, notebooked: false };
+  S.sessions.unshift(s);
+  if (S.sessions.length > 80) S.sessions.length = 80;
+  save();
+  return s;
+}
+function closeSession() {
+  const s = Eng.session;
+  Eng.session = null;
+  if (!s) return;
+  if (!s.tracks.length && !s.log.length) { S.sessions = S.sessions.filter(x => x !== s); save(); return; }
+  updateNotebooks(s);
 }
 
-function stopPoll() { clearInterval(Eng.poll); Eng.poll = null; }
-function startPrefetchPoll(show, segIndex) {
-  stopPoll();
-  Eng.poll = setInterval(() => {
-    try {
-      if (!player || !Eng.pending) return;
-      const d = player.getDuration(), c = player.getCurrentTime();
-      if (d > 0 && d - c < 15) { prefetchTalk(show, segIndex + 1); stopPoll(); }
-    } catch (e) {}
-  }, 2000);
-}
-function prefetchTalk(show, j) {
-  const seg = Eng.segs[j];
-  if (!seg || seg.kind !== 'talk' || seg.pre) return;
-  seg.pre = genLine(show, seg, j, seg.hosts[0], 0, []);
-}
-function invalidateNextTalk() {
-  const seg = Eng.segs[Eng.i + 1];
-  if (seg && seg.kind === 'talk') seg.pre = null;
+function enterBlock(blk) {
+  const prev = Eng.block;
+  closeSession();
+  Eng.block = blk; Eng.slot = 0; Eng.lastKind = null;
+  Eng.session = openSession(blk);
+  const keepPrep = Eng.prep && Eng.prep.forBlock === blk.id;
+  if (!keepPrep) Eng.prep = null;
+  if (Eng.nextPlan && Eng.nextPlan.blockId === blk.id) { Eng.upcoming = Eng.nextPlan.tracks; Eng.topic = Eng.nextPlan.topic || ''; }
+  else if (!prev && S.queue && S.queue.blockId === blk.id && S.queue.date === today()) { Eng.upcoming = (S.queue.tracks || []).map(t => ({ ...t })); Eng.topic = S.queue.topic || ''; }
+  else { Eng.upcoming = []; Eng.topic = ''; }
+  Eng.nextPlan = null;
+  Eng.upcoming = Eng.upcoming.filter(t => (keepPrep && Eng.prep.track === t) || (!recentlyPlayed(t) && verdictOf(t) !== 'skip'));
+  if (prev) Eng.needOpen = { kind: 'handoff', from: prev };
+  else {
+    const back = Eng.session.tracks.length && Date.now() - new Date(Eng.session.lastAt).getTime() < 45 * 60e3;
+    Eng.needOpen = { kind: back ? 'welcome' : 'open' };
+  }
+  persistQueue();
 }
 
-async function playTrack(ti, my, segIndex) {
-  const show = Eng.show, t = show.tracks[ti];
-  if (!(await resolveTrack(show, ti, my))) return;
-  if (my !== Eng.token) return;
+/* briefing */
+const briefingReady = () => S.settings.briefingOn && S.briefing && S.briefing.date === today() && !S.briefing.aired && !!S.briefing.script;
+function maybeStartBriefing() {
+  if (!S.settings.briefingOn || Eng.briefP || Eng.briefTried === today()) return;
+  if (S.briefing && S.briefing.date === today()) return;
+  Eng.briefTried = today();
+  Eng.briefP = genBriefing()
+    .then(b => { S.briefing = b; save(); renderAll(); })
+    .catch(e => { if (e.fatal) return; toast("Today's briefing didn't come through. " + (e.message || ''), 6000); })
+    .finally(() => { Eng.briefP = null; });
+}
+
+/* picking songs a few at a time */
+function planMore(first) {
+  if (Eng.planP) return Eng.planP;
+  const blk = Eng.block, req = Eng.requests.shift();
+  const opts = {
+    after: [...(Eng.session ? Eng.session.tracks.slice(-3) : []), ...Eng.upcoming],
+    exclude: [...Eng.upcoming, ...todaysTracks()],
+    request: req, known: YTQ.quotaDay === today() ? knownSongs() : null
+  };
+  Eng.planP = planSet(blk, first ? 3 : 5, opts).then(r => {
+    if (Eng.block !== blk) return;
+    Eng.upcoming.push(...r.tracks);
+    if (r.topic && !Eng.topic) Eng.topic = r.topic;
+    persistQueue(); renderAll();
+  }, e => { Eng.planRetryAt = Date.now() + 30000; throw e; }).finally(() => { Eng.planP = null; });
+  return Eng.planP;
+}
+function planNextBlock() {
+  const nb = nextBlockOf(Eng.block);
+  if (!nb || nb.id === Eng.block.id || Eng.nextPlanP || (Eng.nextPlan && Eng.nextPlan.blockId === nb.id) || Date.now() < (Eng.nextPlanRetryAt || 0)) return;
+  Eng.nextPlanP = planSet(nb, 3, { exclude: [...Eng.upcoming, ...todaysTracks()], known: YTQ.quotaDay === today() ? knownSongs() : null })
+    .then(r => { Eng.nextPlan = { blockId: nb.id, tracks: r.tracks, topic: r.topic }; if (r.tracks[0]) resolveTrack(r.tracks[0]).catch(() => {}); })
+    .catch(() => { Eng.nextPlanRetryAt = Date.now() + 60000; })
+    .finally(() => { Eng.nextPlanP = null; });
+}
+
+/* ---------- breaks: what the hosts say between songs ---------- */
+function makeStream() {
+  const s = {
+    lines: [], done: false, waiters: [],
+    push(l) { s.lines.push(l); s.wake(); },
+    end() { s.done = true; s.wake(); },
+    wake() { const w = s.waiters; s.waiters = []; w.forEach(f => f()); },
+    next(i) { return (i < s.lines.length || s.done) ? Promise.resolve() : new Promise(r => s.waiters.push(r)); }
+  };
+  return s;
+}
+function lastAired() { const s = Eng.session; return s && s.tracks.length ? s.tracks[s.tracks.length - 1] : null; }
+function breakCtx(extra = {}) {
+  const when = new Date(Date.now() + (extra.etaMs || 0));
+  const block = extra.block || Eng.block;
+  const b = S.briefing;
+  return {
+    block, fromBlock: extra.from || (Eng.needOpen && Eng.needOpen.from) || null,
+    prev: extra.prev !== undefined ? extra.prev : (Eng.cur || lastAired()),
+    dayText: when.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+    clock: fmtClock(when),
+    recent: Eng.recent.slice(-6),
+    topic: Eng.topic, briefing: b,
+    newsHost: b && hostById(b.host) && hostById(b.host).enabled ? b.host : newsHost().id,
+    firstToday: !S.sessions.some(s => s.date === today() && s !== Eng.session && s.tracks.length)
+  };
+}
+function weighted(pairs) { let r = Math.random() * pairs.reduce((a, p) => a + p[1], 0); for (const [k, w] of pairs) { r -= w; if (r <= 0) return k; } return pairs[0][0]; }
+function chooseKind(t) {
+  if (Eng.needOpen) return Eng.needOpen.kind;
+  if (briefingReady() && Eng.slot >= 1) return 'news';
+  if (t && t.request) return 'request';
+  const talk = Eng.block.talk || 'balanced', cast = blockHosts(Eng.block);
+  const every = { chatty: 4, balanced: 6, light: 0 }[talk] || 0;
+  if (every && Eng.topic && cast.length > 1 && Eng.slot >= 2 && Eng.slot % every === 0) return 'topic';
+  const w = { chatty: [['intro', .4], ['banter', .45], ['segue', .15]], balanced: [['intro', .45], ['banter', .25], ['segue', .3]], light: [['intro', .45], ['banter', .1], ['segue', .45]] }[talk] || [['intro', .5], ['banter', .3], ['segue', .2]];
+  let k = weighted(w);
+  if (k === 'segue' && (Eng.lastKind === 'segue' || Eng.slot < 1)) k = 'intro';
+  if (k === 'banter' && cast.length < 2) k = 'intro';
+  return k;
+}
+function castFor(kind, t, ctx) {
+  const pool = blockHosts(ctx.block), talk = ctx.block.talk || 'balanced';
+  const pickedOn = t && pool.includes(t.pickedBy) ? t.pickedBy : null;
+  const solo = pool.length < 2;
+  const other = id => { const o = pool.filter(x => x !== id); return o.length ? pick(o) : id; };
+  switch (kind) {
+    case 'open': return { cast: pool.slice(0, 3), n: solo ? 1 : ({ chatty: 4, balanced: 3, light: 2 }[talk] || 3) };
+    case 'welcome': return { cast: pool.slice(0, 2), n: solo || talk === 'light' ? 1 : 2 };
+    case 'handoff': {
+      const from = ctx.fromBlock ? blockHosts(ctx.fromBlock)[0] : null;
+      const cast = [...new Set([from, ...pool.slice(0, 2)].filter(Boolean))];
+      return { cast, n: Math.min(3, Math.max(2, cast.length)) };
+    }
+    case 'news': { const reader = ctx.newsHost; const reactor = pool.find(x => x !== reader) || reader; return { cast: [reader, reactor], n: 1 }; }
+    case 'topic': return { cast: shuffle(pool).slice(0, 3), n: ({ chatty: 5, balanced: 4, light: 3 }[talk] || 4) };
+    case 'banter': {
+      const a = ctx.prev && pool.includes(ctx.prev.pickedBy) ? ctx.prev.pickedBy : pick(pool);
+      const b = pickedOn && pickedOn !== a ? pickedOn : other(a);
+      return { cast: [a, b], n: talk === 'chatty' ? pick([2, 3, 3]) : pick([2, 2, 3]) };
+    }
+    case 'request': return { cast: [pickedOn || pool[0]], n: 1 };
+    default: return { cast: [pickedOn || pick(pool)], n: 1 };
+  }
+}
+function nextSpeaker(cast, current, said) {
+  const others = cast.filter(x => x !== current);
+  if (!others.length) return current;
+  const count = id => said.filter(l => l.host === id).length;
+  return others.slice().sort((a, b) => count(a) - count(b))[0];
+}
+const stationId = ctx => pick([
+  `${STN()}, ${S.settings.freq} FM.`,
+  `You're locked in to ${STN()}.`,
+  `${ctx.block.name}, on ${STN()}.`,
+  `${STN()}. Made for ${L()}.`
+]);
+const fallbackLine = (t, host) => ({ host, say: pick([`Here's ${t.title} from ${t.artist}.`, `This is ${t.artist}, ${t.title}.`, `${t.title}, ${t.artist}. Here it is.`]) });
+
+async function buildBreak(kind, trackP, ctx, stream, prep) {
+  prep.kind = kind;
+  const finishLine = (line, t) => {
+    line.final = true;
+    line.over = !!t && words(line.say) <= 32;
+    return line;
+  };
+  try {
+    if (kind === 'segue') {
+      const t = await trackP;
+      if (Math.random() < 0.6) stream.push(finishLine(prepAudio({ host: pick(blockHosts(ctx.block)), say: stationId(ctx), canned: true }), t));
+      return;
+    }
+    if (kind === 'news' && !(ctx.briefing && ctx.briefing.script)) prep.kind = kind = 'intro';
+    const firstT = ctx.trackKnown ? await trackP : null;
+    const { cast, n } = castFor(kind, firstT, ctx);
+    prep.cast = cast;
+    if (kind === 'news') stream.push(prepAudio({ host: cast[0], say: ctx.briefing.script, news: true }));
+    let speaker = kind === 'news' ? cast[1] : cast[0];
+    const said = [];
+    for (let turn = 0; turn < n; turn++) {
+      if (prep.dead) return;
+      const final = turn === n - 1;
+      const track = final || ctx.trackKnown ? await trackP : null;
+      let r;
+      try { r = await genTurn(speaker, { kind, ctx, prior: said, turn, total: n, track, cast }); }
+      catch (e) {
+        if (e.fatal) throw e;
+        const t = await trackP;
+        if (t) stream.push(finishLine(prepAudio(fallbackLine(t, said.length ? said[said.length - 1].host : cast[0])), t));
+        return;
+      }
+      if (prep.dead) return;
+      const line = { host: r.host, say: r.say };
+      if (final) {
+        if (track && !mentionsTrack(line.say, track)) line.say = `${line.say} ${pick(['Here’s', 'This is'])} ${track.title}, ${track.artist}.`;
+        finishLine(line, track);
+      }
+      said.push(line);
+      stream.push(prepAudio(line));
+      // in a handoff, the outgoing host only gets the first line
+      const pool = kind === 'handoff' && cast.length > 1 ? cast.slice(1) : cast;
+      speaker = r.next && pool.includes(r.next) && r.next !== r.host ? r.next : nextSpeaker(pool, r.host, said);
+    }
+  } finally {
+    stream.end();
+  }
+}
+
+function startPrep(t, opts = {}) {
+  const block = opts.block || Eng.block;
+  let kind = opts.kind;
+  if (!kind) {
+    if (opts.quick) kind = Eng.needOpen ? Eng.needOpen.kind : (t && t.request ? 'request' : (Math.random() < 0.3 ? 'segue' : 'intro'));
+    else kind = chooseKind(t);
+  }
+  const ctx = breakCtx({ etaMs: opts.etaMs || 0, block, from: opts.from });
+  ctx.trackKnown = !!t;
+  let bind = null;
+  const trackP = t ? Promise.resolve(t) : new Promise(r => { bind = r; });
+  const stream = makeStream();
+  const prep = { track: t, kind, bind, stream, ctx, quick: !!opts.quick, forBlock: block.id, error: null, dead: false, cast: [] };
+  prep.promise = buildBreak(kind, trackP, ctx, stream, prep).catch(e => { prep.error = e; });
+  if (Eng.prep && Eng.prep !== prep) Eng.prep.dead = true;
+  Eng.prep = prep;
+  return prep;
+}
+
+async function takeBreak(t, my) {
+  let p = Eng.prep;
+  if (p && !p.track && p.bind) { p.track = t; p.bind(t); }
+  if (!p || p.track !== t || p.forBlock !== Eng.block.id) p = startPrep(t, { quick: true });
+  const ready = () => p.stream.lines.length > 0 || p.stream.done;
+  if (!ready()) {
+    Eng.status = 'On the mic in a second'; renderLive();
+    let cancel;
+    const timeout = new Promise(r => { const tm = setTimeout(r, p.quick ? 9000 : 12000); cancel = () => { clearTimeout(tm); r(); }; });
+    Eng.waitCancel = cancel;
+    await Promise.race([p.stream.next(0), timeout]);
+    Eng.waitCancel = null;
+    Eng.status = '';
+    if (!live(my)) return null;
+  }
+  if (Eng.prep === p) Eng.prep = null;
+  if (p.error && p.error.fatal) throw p.error;
+  if (!p.stream.lines.length) { p.dead = true; return { kind: 'segue', stream: Object.assign(makeStream(), { done: true }), cast: [] }; }
+  return p;
+}
+
+function consumeBreak(b) {
+  if (['open', 'welcome', 'handoff'].includes(b.kind)) Eng.needOpen = null;
+  if (b.kind === 'news' && S.briefing) { S.briefing.aired = true; save(); }
+  if (b.kind === 'topic') Eng.topic = '';
+  Eng.lastKind = b.kind;
+  Eng.caption = [];
+  Eng.cast = b.cast && b.cast.length ? b.cast : blockHosts(Eng.block);
+}
+
+async function airLine(line) {
+  Eng.speaking = line.host;
+  Eng.caption.push(line); if (Eng.caption.length > 3) Eng.caption.shift();
+  Eng.recent.push({ host: line.host, say: line.news ? firstSentence(line.say) + ' (the daily briefing)' : line.say });
+  if (Eng.recent.length > 8) Eng.recent.shift();
+  if (Eng.session && !line.canned) { Eng.session.log.push({ h: line.host, t: line.say }); if (Eng.session.log.length > 300) Eng.session.log.splice(0, 60); saveSoon(); }
+  renderLive();
+  await voiceOut(line);
+}
+// Plays the break up to its last line, which is handed back to play over the song's intro.
+async function airDry(b, my) {
+  const s = b.stream;
+  let i = 0;
+  while (true) {
+    await s.next(i);
+    if (!live(my) || Eng.cutTalk) return [];
+    if (i >= s.lines.length) break;
+    const line = s.lines[i];
+    if (line.final && line.over) return [line];
+    await airLine(line);
+    if (!live(my)) return [];
+    i++;
+  }
+  Eng.speaking = null; renderLive();
+  return [];
+}
+async function airOver(lines, my) {
+  for (const line of lines) {
+    if (!live(my) || Eng.cutTalk || Eng.paused) break;
+    await airLine(line);
+  }
+  Eng.speaking = null; renderLive();
+}
+
+async function playTrack(t, overLines, my) {
   try { await ensurePlayer(); }
-  catch (e) { stopRun(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "YouTube's player didn't load. Check your connection, then tap Resume."); return; }
-  if (my !== Eng.token) return;
-  t.status = 'playing'; t.cut = false; notePlayed(t); save(); renderAll();
-  prefetchTrack(show, ti + 1);
-  startPrefetchPoll(show, segIndex);
+  catch (e) { haltAir(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "YouTube's player didn't load. Check your connection, then tap Tune in."); return; }
+  if (!live(my)) return;
+  Eng.cur = t; t.status = 'playing'; t.cut = false; t.playedAt = Date.now();
+  Eng.slot++;
+  if (Eng.session) { Eng.session.tracks.push(t); Eng.session.lastAt = new Date().toISOString(); }
+  notePlayed(t); save(); renderAll();
+  let overDone = !overLines.length;
   for (let k = t.vi || 0; k < t.videoIds.length; k++) {
-    t.vi = k; saveSoon();
-    const r = await playVideo(t.videoIds[k]);
-    if (r === 'ended' || r === 'aborted') { stopPoll(); if (t.status === 'playing') t.status = 'played'; if (r === 'aborted') t.cut = true; save(); return; }
-  }
-  stopPoll();
-  t.status = 'missing'; t.vi = 0; save(); renderAll();
-}
-function prefetchTrack(show, ti) { if (show.tracks[ti]) resolveTrack(show, ti, null, true); }
-
-async function runTalk(show, seg, segIndex, my) {
-  seg.lines = [];
-  let pending = seg.pre || genLine(show, seg, segIndex, seg.hosts[0], 0, []);
-  seg.pre = null;
-  Eng.thinking = seg.hosts[0];
-  for (let turn = 0; turn < seg.max; turn++) {
-    renderAll();
-    let res = await pending;
-    if (my !== Eng.token) return;
-    Eng.thinking = null;
-    if (!res || res.error) {
-      if (res && res.error && res.error.fatal) { stopRun(res.error.message); return; }
-      if (turn === 0 && seg.type === 'leadin') {
-        const t = show.tracks[seg.ti];
-        res = { host: seg.hosts[0], say: `Here's ${t.title} by ${t.artist}.`, next: null };
-      } else break;
+    t.vi = k;
+    const pv = playVideo(t.videoIds[k], overDone ? 100 : DUCK);
+    if (!overDone) {
+      overDone = true;
+      await Promise.race([pv.started, sleep(5000)]);
+      if (live(my) && Vid.pending === pv) {
+        await airOver(overLines, my);
+        if (Vid.pending === pv && !pv.fading) fadeTo(100, 1600);
+      }
     }
-    seg.lines.push(res);
-    logLine(show, res);
-    saveSoon();
-    Eng.speaker = res.host;
-    const last = turn + 1 >= seg.max || !res.next;
-    pending = last ? null : genLine(show, seg, segIndex, res.next, turn + 1, seg.lines.slice());
-    renderAll();
-    await speak(res.say, res.host, my);
-    if (my !== Eng.token) return;
-    Eng.speaker = null;
-    if (last) break;
-    Eng.thinking = res.next;
+    if (!live(my)) return;
+    startTrackPoll(t, pv, my);
+    const r = await pv.done;
+    stopTrackPoll();
+    if (!live(my)) return;
+    if (r === 'error') continue;
+    if (r === 'aborted') t.cut = true;
+    t.status = 'played';
+    break;
   }
-  Eng.thinking = null; Eng.speaker = null;
+  if (t.status === 'playing') { t.status = 'missing'; toast(`${t.title} wouldn't play here, so it got skipped.`); }
+  Eng.cur = null; save(); renderAll();
 }
 
-async function runFrom(start) {
+function stopTrackPoll() { clearInterval(Eng.poll); Eng.poll = null; }
+function startTrackPoll(t, pv, my) {
+  stopTrackPoll();
+  let faded = false;
+  Eng.poll = setInterval(() => {
+    if (!live(my) || Vid.pending !== pv) return stopTrackPoll();
+    if (Eng.paused) return;
+    const tm = vidTimes();
+    if (!tm || tm.d < 20) return;
+    const minsLeft = minutesLeftInBlock(Eng.block);
+    const showEndsFirst = minsLeft * 60 < tm.left + 90;
+    // find the next song's video early
+    const nxt = Eng.upcoming[0];
+    if (nxt && !nxt.videoIds && nxt.status !== 'missing' && !nxt.resolving) {
+      nxt.resolving = true;
+      resolveTrack(nxt).then(ok => { nxt.resolving = false; if (!ok) dropUpcoming(nxt); }, () => { nxt.resolving = false; });
+    }
+    // write the next break while this song plays
+    const timeToPrep = tm.c > Math.min(tm.d * 0.45, 75) || tm.left < 80;
+    if (timeToPrep) {
+      if (showEndsFirst) {
+        const nb = nextBlockOf(Eng.block), np = Eng.nextPlan;
+        if (np && np.blockId === nb.id && np.tracks[0] && !(Eng.prep && Eng.prep.forBlock === nb.id))
+          startPrep(np.tracks[0], { kind: 'handoff', block: nb, from: Eng.block, etaMs: tm.left * 1000 });
+      } else if (nxt && (!Eng.prep || Eng.prep.track !== nxt)) startPrep(nxt, { etaMs: tm.left * 1000 });
+    }
+    // keep a few songs lined up, and line up the next show near the end of this one
+    const wantMore = Eng.upcoming.length <= 2 && (minsLeft > 8 || Eng.upcoming.length * 3.5 < minsLeft - tm.left / 60);
+    if (wantMore && !Eng.planP && Date.now() > (Eng.planRetryAt || 0)) planMore(false).catch(() => {});
+    if (minsLeft < 9) planNextBlock();
+    // fade out instead of a hard stop
+    if (!faded && tm.left <= FADE_S) {
+      faded = true; pv.fading = true;
+      fadeTo(0, Math.max(300, (tm.left - 0.4) * 1000)).then(() => { if (Vid.pending === pv) { try { player.pauseVideo(); } catch (e) {} pv.finish('ended'); } });
+    }
+  }, 1000);
+}
+
+async function loop(my) {
+  while (live(my)) {
+    const blk = blockAt(new Date(Date.now() + 90e3));
+    if (!blk) { haltAir('Add a show to the schedule in Settings.'); return; }
+    if (!Eng.block || blk.id !== Eng.block.id) { enterBlock(blk); renderAll(); }
+    if (!Eng.upcoming.length) {
+      if (!Eng.prep && Eng.needOpen) startPrep(null);   // the hosts start writing the open while songs get picked
+      Eng.status = 'Picking songs'; setTuning(true); renderLive();
+      try { await planMore(true); }
+      catch (e) { if (!live(my)) return; if (e.fatal) { haltAir(e.message); return; } toast(e.message || 'The song picker hit a snag.'); }
+      if (!live(my)) return;
+      Eng.status = ''; setTuning(false);
+      if (!Eng.upcoming.length) {
+        if (++Eng.planFails >= 3) { haltAir("The song picker isn't sending songs right now. Try again in a minute."); return; }
+        await sleep(2500); continue;
+      }
+      Eng.planFails = 0;
+    }
+    const t = Eng.upcoming[0];
+    let ok = false;
+    try { ok = await resolveTrack(t); }
+    catch (e) { if (!live(my)) return; haltAir(e.message); return; }
+    if (!live(my)) return;
+    if (!ok) { dropUpcoming(t); continue; }
+    let b;
+    try { b = await takeBreak(t, my); }
+    catch (e) { if (!live(my)) return; haltAir(e.message); return; }
+    if (!live(my) || !b) return;
+    if (Eng.upcoming[0] !== t) continue;   // a request or a jump changed what's next
+    if (Eng.introP) { await Eng.introP; Eng.introP = null; if (!live(my)) return; }
+    Eng.cutTalk = false;
+    consumeBreak(b);
+    if (['open', 'handoff', 'news'].includes(b.kind) || (b.kind === 'segue' && b.stream.lines.length)) await sting();
+    if (!live(my)) return;
+    const over = await airDry(b, my);
+    if (!live(my)) return;
+    if (Eng.upcoming[0] !== t) continue;   // they picked something else to play now
+    Eng.upcoming = Eng.upcoming.filter(x => x !== t); persistQueue();
+    await playTrack(t, over, my);
+  }
+}
+function runLoop() {
   const my = ++Eng.token;
-  const show = Eng.show;
-  Eng.running = true; Eng.paused = false; Eng.error = null; show.done = false;
+  loop(my).catch(e => { if (live(my)) haltAir((e && e.message) || 'Something went wrong. Tap Tune in to try again.'); });
+}
+
+/* controls */
+function tuneIn() {
+  const st = S.settings;
+  if (!st.claudeKey.trim() || !st.ytKey.trim()) { toast('Add your keys in Settings first.'); go('settings'); return; }
+  if (!activeHosts().length) { toast('Turn on at least one host in Settings.'); go('settings'); return; }
+  if (Eng.on && Eng.paused) return resumeAir();
+  if (Eng.on) return;
+  unlockAudio();
+  ensurePlayer().catch(() => {});
+  Eng.on = true; Eng.paused = false; Eng.error = null; Eng.planFails = 0; Eng.cutTalk = false;
+  S.sessions.filter(s => !s.notebooked && s.log && s.log.length >= 4 && s !== Eng.session).slice(0, 2).forEach(s => updateNotebooks(s));
+  const blk = blockAt(new Date(Date.now() + 90e3));
+  if (Eng.block && blk && Eng.block.id === blk.id) Eng.needOpen = Eng.needOpen || { kind: 'welcome' };
+  else { Eng.block = null; Eng.prep = null; }
+  maybeStartBriefing();
   setOnAir(true); keepAwake(true);
-  for (let i = start; i < Eng.segs.length; i++) {
-    if (my !== Eng.token) return;
-    Eng.i = i; show.progress = i; saveSoon();
-    Eng.speaker = null; Eng.thinking = null; Eng.saying = null;
-    const seg = Eng.segs[i];
-    if (seg.kind !== 'track' && seg.ti != null) {
-      renderAll();
-      const ok = await resolveTrack(show, seg.ti, my);
-      if (my !== Eng.token) return;
-      if (!ok) { const j = Eng.segs.findIndex((s, k) => k > i && s.kind === 'track' && s.ti === seg.ti); if (j < 0) break; i = j; continue; }
-    }
-    renderAll();
-    if (seg.kind === 'talk') await runTalk(show, seg, i, my);
-    else if (seg.kind === 'say') {
-      Eng.speaker = seg.host; Eng.saying = { host: seg.host, say: seg.text };
-      logLine(show, Eng.saying); renderAll();
-      await speak(seg.text, seg.host, my);
-      Eng.speaker = null;
-    }
-    else await playTrack(seg.ti, my, i);
+  const my = Eng.token + 1;
+  Eng.introP = (async () => {
+    await sting();
+    if (!blk || !live(my)) return;
+    const line = prepAudio({ host: blockHosts(blk)[0], say: `${STN()}, ${st.freq} FM.`, canned: true });
+    if (line.audio) await Promise.race([line.audio, sleep(2500)]);
+    if (!live(my)) return;
+    Eng.caption = [];
+    await airLine(line);
+    Eng.speaking = null; renderLive();
+  })();
+  renderAll();
+  runLoop();
+}
+function pauseAir() {
+  if (!Eng.on || Eng.paused) return;
+  Eng.paused = true; Eng.pausedAt = Date.now();
+  if (Eng.cur && Vid.pending) { try { player.pauseVideo(); } catch (e) {} stopVoice(); Eng.cutTalk = true; }
+  else { Eng.token++; stopVoice(); Eng.speaking = null; Eng.status = ''; setTuning(false); if (Eng.waitCancel) Eng.waitCancel(); }
+  setOnAir(false); keepAwake(false); renderAll();
+}
+function resumeAir() {
+  if (!Eng.on) return tuneIn();
+  if (!Eng.paused) return;
+  const gap = Date.now() - Eng.pausedAt;
+  Eng.paused = false; unlockAudio(); setOnAir(true); keepAwake(true);
+  if (gap > 20 * 60e3 && !Eng.needOpen) Eng.needOpen = { kind: 'welcome' };
+  if (Eng.cur && Vid.pending) { try { player.playVideo(); } catch (e) {} if (Vid.vol < 100 && !Vid.fadeT) fadeTo(100, 800); }
+  else runLoop();
+  renderAll();
+}
+function togglePlay() { if (!Eng.on) tuneIn(); else if (Eng.paused) resumeAir(); else pauseAir(); }
+function skip() {
+  if (!Eng.on) return;
+  if (Eng.paused) { resumeAir(); }
+  stopVoice(); Eng.cutTalk = true;
+  if (Eng.waitCancel) Eng.waitCancel();
+  const pv = Vid.pending;
+  if (Eng.cur && pv) {
+    pv.fading = true;
+    fadeTo(0, 450).then(() => { if (Vid.pending === pv) { try { player.pauseVideo(); } catch (e) {} pv.finish('aborted'); } });
   }
-  if (my !== Eng.token) return;
-  Eng.running = false; Eng.paused = false; show.done = true; show.progress = 0;
-  Eng.speaker = null; Eng.thinking = null;
-  setOnAir(false); keepAwake(false); save(); renderAll();
-  updateNotebooks(show);
 }
-
-function haltCurrent() {
+function playNow(t) {
+  if (!Eng.on) return;
+  Eng.upcoming = [t, ...Eng.upcoming.filter(x => x !== t)];
+  if (Eng.prep) { Eng.prep.dead = true; Eng.prep = null; }
+  persistQueue();
+  if (Eng.cur) skip();
+  else { stopVoice(); Eng.cutTalk = true; if (Eng.paused) resumeAir(); }
+  renderAll();
+}
+function haltAir(msg) {
   Eng.token++;
-  stopPoll();
-  try { speechSynthesis.cancel(); } catch (e) {}
-  if (Eng.cancelTalk) Eng.cancelTalk();
-  if (Eng.pending) Eng.pending.resolve('aborted');
+  stopTrackPoll(); stopVoice();
+  if (Eng.prep) { Eng.prep.dead = true; Eng.prep = null; }
+  if (Vid.pending) Vid.pending.finish('aborted');
   try { if (player && player.pauseVideo) player.pauseVideo(); } catch (e) {}
-  const seg = Eng.segs[Eng.i];
-  if (Eng.show && seg && seg.kind === 'track') { const t = Eng.show.tracks[seg.ti]; if (t && t.status === 'playing') { t.status = 'played'; t.cut = true; } }
-  Eng.speaker = null; Eng.thinking = null;
-  $('#tapHint').hidden = true;
-}
-function stopEverything() {
-  haltCurrent();
-  Eng.running = false; Eng.paused = false; Eng.show = null; Eng.segs = []; Eng.i = -1; Eng.error = null; Eng.lastLine = null;
-  setOnAir(false); keepAwake(false);
-}
-function stopRun(msg) {
-  haltCurrent();
-  Eng.paused = true; Eng.error = msg;
-  setOnAir(false); toast(msg, 6000); save(); renderAll();
+  if (Eng.cur) { Eng.cur.status = 'played'; Eng.cur.cut = true; Eng.cur = null; }
+  Eng.on = false; Eng.paused = false; Eng.error = msg || null; Eng.speaking = null; Eng.status = ''; Eng.introP = null;
+  setOnAir(false); setTuning(false); keepAwake(false); persistQueue(); save();
+  if (msg) toast(msg, 7000);
+  renderAll();
 }
 
-function startOrToggle() {
-  const show = currentShow();
-  if (!show) return;
-  const active = Eng.show && Eng.show.id === show.id && Eng.running;
-  if (active && !Eng.paused) return pause();
-  if (active && Eng.paused) return resume();
-  unlockAudio();
-  if (show.done) { show.tracks.forEach(t => { if (t.status !== 'missing') t.status = 'queued'; t.cut = false; }); show.progress = 0; show.done = false; }
-  Eng.show = show; Eng.segs = buildSegments(show);
-  runFrom(Math.min(Math.max(0, show.progress || 0), Eng.segs.length - 1));
-}
-function pause() {
-  if (!Eng.running) return;
-  const seg = Eng.segs[Eng.i];
-  Eng.paused = true;
-  if (seg && seg.kind === 'track' && Eng.pending) { try { player.pauseVideo(); } catch (e) {} }
-  else { Eng.token++; try { speechSynthesis.cancel(); } catch (e) {} if (Eng.cancelTalk) Eng.cancelTalk(); Eng.speaker = null; Eng.thinking = null; }
-  setOnAir(false); renderAll();
-}
-function resume() {
-  const seg = Eng.segs[Eng.i];
-  unlockAudio();
-  Eng.error = null;
-  if (seg && seg.kind === 'track' && Eng.pending) { Eng.paused = false; try { player.playVideo(); } catch (e) {} setOnAir(true); renderAll(); }
-  else runFrom(Math.max(0, Eng.i));
-}
-function next() {
-  if (!Eng.running) return;
-  const i = Eng.i;
-  const wasTrack = Eng.segs[i] && Eng.segs[i].kind === 'track';
-  haltCurrent();
-  if (wasTrack) invalidateNextTalk();
-  runFrom(Math.min(i + 1, Eng.segs.length));
-}
-function jumpTo(ti) {
-  const show = currentShow();
-  if (!show) return;
-  if (!(Eng.show && Eng.show.id === show.id)) { stopEverything(); Eng.show = show; Eng.segs = buildSegments(show); }
-  const idx = Eng.segs.findIndex(s => s.ti === ti);
-  if (idx < 0) return;
-  const t = show.tracks[ti];
-  if (t.status === 'missing') { t.status = 'queued'; t.videoIds = null; t.vi = 0; }
-  haltCurrent(); unlockAudio();
-  runFrom(idx);
+async function sendRequest(text) {
+  text = String(text || '').trim();
+  if (!text) return;
+  if (!S.settings.claudeKey.trim() || !S.settings.ytKey.trim()) { toast('Add your keys in Settings first.'); return; }
+  if (!Eng.on || !Eng.block) { Eng.requests.push(text); toast("Got it. They'll play it first when you tune in."); return; }
+  toast('Request in. Finding it now.');
+  const blk = Eng.block;
+  try {
+    const r = await planSet(blk, 2, { request: text, after: [...(Eng.session ? Eng.session.tracks.slice(-2) : [])], exclude: [...Eng.upcoming, ...todaysTracks()], known: YTQ.quotaDay === today() ? knownSongs() : null });
+    if (Eng.block !== blk || !Eng.on) return;
+    const reqT = r.tracks.find(t => t.request) || r.tracks[0];
+    if (!reqT) { toast("Couldn't find that one. Try wording it another way."); return; }
+    reqT.request = text;
+    const ok = await resolveTrack(reqT).catch(() => false);
+    if (!ok) { toast(`Couldn't find ${reqT.title} on YouTube. Try another one.`); return; }
+    const prepped = !!(Eng.cur && Eng.prep && Eng.prep.track === Eng.upcoming[0] && Eng.prep.stream.lines.length) || (!Eng.cur && !!Eng.speaking && Eng.upcoming.length > 0);
+    const at = prepped ? 1 : 0;
+    if (!prepped && Eng.prep && Eng.prep.track) { Eng.prep.dead = true; Eng.prep = null; }
+    Eng.upcoming.splice(at, 0, ...r.tracks.filter(t => t === reqT || !Eng.upcoming.some(u => trackKey(u) === trackKey(t))).slice(0, 2));
+    persistQueue(); renderAll();
+    toast(at === 0 ? `${reqT.title} is up next.` : `${reqT.title} is coming up after this next song.`);
+  } catch (e) { toast(e.message || "The request didn't go through."); }
 }
 
 /* ---------- feedback ---------- */
@@ -1418,8 +1956,16 @@ function setVerdict(t, v) {
   S.feedback = S.feedback.filter(f => f.k !== k);
   if (t.verdict) S.feedback.unshift({ k, artist: t.artist, title: t.title, verdict: t.verdict, at: Date.now(), videoId: (t.videoIds && t.videoIds[t.vi || 0]) || null });
   if (S.feedback.length > 500) S.feedback.length = 500;
+  S.sessions.forEach(s => s.tracks.forEach(x => { if (x !== t && trackKey(x) === k) x.verdict = t.verdict; }));
   save();
-  toast(({ love: 'Saved to Loved songs.', more: 'Noted. More like this next time.', skip: 'Got it. Less like this from now on.' })[t.verdict] || 'Cleared.');
+  // if the next break was already written, let the hosts react to this instead
+  if (t === Eng.cur && Eng.prep && Eng.prep.track === Eng.upcoming[0] && t.verdict !== 'skip') {
+    const tm = vidTimes();
+    if (tm && tm.left > 40) { Eng.prep.dead = true; Eng.prep = null; }
+  }
+  toast(({ love: 'Saved to Loved songs.', more: 'Noted. More like this from now on.', skip: 'Got it. Less like this from now on.' })[t.verdict] || 'Cleared.');
+  if (t === Eng.cur && t.verdict === 'skip') { if (Eng.prep) { Eng.prep.dead = true; Eng.prep = null; } skip(); }
+  renderAll();
 }
 
 /* ---------- rendering ---------- */
@@ -1430,6 +1976,10 @@ const ytmLink = t => {
   return id ? `https://music.youtube.com/watch?v=${encodeURIComponent(id)}` : `https://music.youtube.com/search?q=${encodeURIComponent(t.artist + ' ' + t.title)}`;
 };
 const hc = id => { const h = hostById(id); return h ? h.color : 'var(--accent)'; };
+const chipHTML = (id, on) => { const h = hostById(id); return h ? `<span class="hchip${on ? ' on' : ''}" style="--hc:${esc(h.color)}"><span class="hdot"></span>${esc(h.name)}</span>` : ''; };
+const lineHTML = (l, isLive) => `<div class="line${isLive ? ' is-live' : ''}" style="--hc:${esc(hc(l.host))}"><span class="who">${esc(hostName(l.host))}</span><p>${esc(l.say)}</p></div>`;
+const aboutText = b => String(b.about || '').replace(/\bthe listener\b/gi, L());
+const shownBlock = () => (Eng.on && Eng.block) || blockAt(new Date()) || sched()[0];
 
 function renderHeader() {
   const st = S.settings;
@@ -1437,163 +1987,145 @@ function renderHeader() {
   $('#freqNum').textContent = st.freq || '88.7';
   const f = parseFloat(st.freq);
   $('#needle').style.setProperty('--pos', String(Math.min(.98, Math.max(.02, ((isNaN(f) ? 88.7 : f) - 88) / 20))));
-  const now = new Date();
-  const part = partOfDay(now), who = st.listener || 'Lune';
-  $('#dateline').textContent = `${fmtDate(now.toISOString())}. ${part === 'late night' ? `Up late, ${who}.` : `Good ${part}, ${who}.`}`;
+  const now = new Date(), h = now.getHours();
+  const greet = h < 5 ? `Up late, ${L()}.` : h < 12 ? `Good morning, ${L()}.` : h < 17 ? `Good afternoon, ${L()}.` : h < 21 ? `Good evening, ${L()}.` : `Up late, ${L()}.`;
+  $('#dateline').textContent = `${fmtDate(now.toISOString())}. ${greet}`;
   document.title = st.station || 'Lune FM';
+  $('#schedHead').textContent = `Today on ${st.station || 'Lune FM'}`;
 }
 
-function renderGen() {
-  $('#genSteps').innerHTML = Gen.steps.map(s => `<div class="step ${s.state}"><span class="dot"></span><span>${esc(s.label)}${s.state === 'fail' ? ', didn’t work' : ''}</span></div>`).join('');
+function renderNowOn() {
+  const b = shownBlock();
+  if (!b) return;
+  $('#slotLabel').textContent = `${Eng.on ? 'On air' : 'On now'} · ${blockSlot(b)}`;
+  $('#blockName').textContent = b.name;
+  $('#blockAbout').textContent = aboutText(b);
+  const speaking = Eng.on && !Eng.paused ? Eng.speaking : null;
+  const ids = blockHosts(b);
+  if (speaking && !ids.includes(speaking)) ids.push(speaking);
+  $('#blockHosts').innerHTML = ids.map(id => chipHTML(id, id === speaking)).join('');
+  $('#tuneWrap').hidden = Eng.on;
+  const keys = S.settings.claudeKey.trim() && S.settings.ytKey.trim();
+  $('#tuneBtn').innerHTML = ICON.play + (Eng.error ? 'Tune back in' : 'Tune in');
+  $('#tuneBtn').disabled = !keys;
+  const nb = nextBlockOf(b);
+  $('#tuneNote').textContent = Eng.error ? Eng.error : !keys ? 'Add your keys in Settings to go live.' : nb && nb.id !== b.id ? `Then ${nb.name} at ${fmtHour(nb.start)}.` : '';
 }
 
+function renderLive() {
+  const on = Eng.on;
+  $('#livePanel').hidden = !on;
+  if (!on) { renderMini(); return; }
+  const t = Eng.cur;
+  const talking = !!Eng.speaking && !Eng.paused;
+  let label;
+  if (Eng.paused) label = 'Paused';
+  else if (Eng.status) label = Eng.status;
+  else if (talking) label = t ? 'On the mic, song starting' : 'On the mic';
+  else if (t) label = 'Now playing';
+  else label = 'Tuning in';
+  $('#nowLabel').textContent = label;
+  $('#micDot').classList.toggle('on', talking);
+  const statusMsg = Eng.status === 'Picking songs' ? `The hosts are picking the first songs for ${Eng.block ? Eng.block.name : 'the show'}.` : '';
+  $('#statusText').hidden = !statusMsg; $('#statusText').textContent = statusMsg;
+  const cast = (Eng.cast && Eng.cast.length ? Eng.cast : blockHosts(Eng.block || shownBlock())).slice();
+  if (Eng.speaking && !cast.includes(Eng.speaking)) cast.push(Eng.speaking);
+  const showStudio = talking || (!t && Eng.caption.length);
+  $('#studio').hidden = !showStudio;
+  if (showStudio) $('#studio').innerHTML = cast.map(id => chipHTML(id, id === Eng.speaking && talking)).join('');
+  const showCaps = (talking || !t) && Eng.caption.length > 0;
+  $('#convo').hidden = !showCaps;
+  if (showCaps) $('#convo').innerHTML = Eng.caption.map((l, i, a) => lineHTML(l, i === a.length - 1 && talking)).join('');
+  const shown = t || (talking && Eng.upcoming[0]) || null;
+  $('#trackInfo').hidden = !shown;
+  if (shown) {
+    const bits = [];
+    if (!t) bits.push('Up next');
+    if (shown.request) bits.push('your request');
+    else if (shown.pickedBy) bits.push(`${hostName(shown.pickedBy)}'s pick`);
+    $('#tUp').textContent = bits.join(' · ');
+    $('#tUp').hidden = !bits.length;
+    $('#tTitle').textContent = shown.title;
+    $('#tArtist').textContent = shown.artist;
+    $('#tWhy').textContent = shown.why || ''; $('#tWhy').hidden = !shown.why;
+    $('#tLink').href = ytmLink(shown);
+  }
+  $('#verdicts').hidden = !t;
+  if (t) $$('#verdicts .chip').forEach(c => { const v = t.verdict === c.dataset.verdict; c.classList.toggle('on', v); c.setAttribute('aria-pressed', String(v)); });
+  $('#playBtn').innerHTML = Eng.paused ? ICON.play + 'Resume' : ICON.pause + 'Pause';
+  $('#skipBtn').disabled = !on;
+  setTuning(Eng.status === 'Picking songs');
+  renderNowOn();
+  renderMini();
+}
+
+function upcomingForDisplay() {
+  if (Eng.on) return Eng.upcoming;
+  const b = shownBlock();
+  return S.queue && b && S.queue.blockId === b.id && S.queue.date === today() ? S.queue.tracks || [] : [];
+}
+function renderUpNext() {
+  const list = upcomingForDisplay();
+  $('#upHead').hidden = !Eng.on && !list.length;
+  $('#upList').hidden = !Eng.on && !list.length;
+  $('#upList').innerHTML = list.length ? list.slice(0, 6).map((t, i) => {
+    const who = t.request ? '<span class="r-note">your request</span>' : t.pickedBy ? `${esc(hostName(t.pickedBy))}'s pick` : '';
+    const inner = `<span class="r-title">${esc(t.title)}</span><span class="r-artist">${esc(t.artist)}${who ? ` · ${who}` : ''}</span>`;
+    return `<li class="row" data-up="${i}">${Eng.on ? `<button class="row-main" data-act="now" aria-label="Play ${esc(t.title)} now">${inner}</button>` : `<span class="row-static">${inner}</span>`}<span class="tag${t.tag === 'new' ? ' new' : ''}">${esc(t.tag || '')}</span><span></span></li>`;
+  }).join('') : `<li class="emptyrow">${Eng.on ? 'The hosts are lining up the next songs.' : ''}</li>`;
+}
+function playedToday() {
+  return todaysTracks().filter(t => t.playedAt && t !== Eng.cur).sort((a, b) => b.playedAt - a.playedAt).slice(0, 8);
+}
+function renderPlayed() {
+  const list = playedToday();
+  $('#playedHead').hidden = !list.length;
+  $('#playedList').hidden = !list.length;
+  $('#playedList').innerHTML = list.map((t, i) => `<li class="row" data-played="${i}">
+      <a class="row-main" href="${esc(ytmLink(t))}" target="_blank" rel="noopener"><span class="r-title">${esc(t.title)}</span><span class="r-artist">${esc(t.artist)} · ${esc(fmtClock(new Date(t.playedAt)))}</span></a>
+      <span class="tag${t.tag === 'new' ? ' new' : ''}">${esc(t.tag || '')}</span>
+      <button class="heart${t.verdict === 'love' ? ' on' : ''}" data-act="love" aria-label="Love ${esc(t.title)}" aria-pressed="${t.verdict === 'love'}">${ICON.heart}</button>
+    </li>`).join('');
+}
+function renderBrief() {
+  const b = S.briefing, box = $('#briefBox');
+  const show = !!(b && b.date === today() && b.items);
+  box.hidden = !show;
+  if (!show) return;
+  $('#briefCount').textContent = `${b.items.length} ${b.items.length === 1 ? 'story' : 'stories'}`;
+  $('#briefBy').textContent = `${b.aired ? 'Read' : 'Coming up, read'} by ${hostName(b.host)}`;
+  $('#briefList').innerHTML = b.items.map(it => `<li><span class="cat">${esc(it.category)}</span><span class="hl">${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.headline)}</a>` : esc(it.headline)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ''}</li>`).join('');
+}
+function renderSched() {
+  const cur = shownBlock();
+  $('#schedList').innerHTML = sched().map(b => {
+    const on = cur && b.id === cur.id;
+    return `<li class="${on ? 'on' : ''}"><span class="s-time">${esc(fmtHour(b.start))}</span><span><span class="s-name">${esc(b.name)}</span><br><span class="s-hosts">${esc(listJoin(blockHosts(b).map(hostName)))}</span></span><span class="tag${on ? ' new' : ''}">${on ? 'On now' : esc((TALK_LEVELS.find(x => x[0] === b.talk) || ['', ''])[1])}</span></li>`;
+  }).join('');
+  const spent = S.spend[today()] || 0;
+  $('#spendLine').textContent = `Today's Claude cost: ${fmtCost(spent)}`;
+}
+function renderAir() {
+  const st = S.settings;
+  $('#previewNote').hidden = !looksPreview;
+  $('#setupCard').hidden = !!(st.claudeKey.trim() && st.ytKey.trim()) || !$('#syncIn').hidden;
+  renderNowOn(); renderLive(); renderUpNext(); renderPlayed(); renderBrief(); renderSched();
+}
 function renderAll() {
   renderHeader();
   renderAir();
   renderMini();
   if (UI.view === 'history') renderHistory();
 }
-
-function showHostIds(show) {
-  if (show.v !== 2) return [anchorHost().id];
-  const ids = new Set([...(show.opening || []), ...(show.signoff || [])]);
-  show.tracks.forEach(t => (t.onMic || []).forEach(id => ids.add(id)));
-  if (show.briefing && show.briefing.host) ids.add(show.briefing.host);
-  return hosts().map(h => h.id).filter(id => ids.has(id));
-}
-
-function renderAir() {
-  const st = S.settings, show = currentShow();
-  $('#previewNote').hidden = !looksPreview;
-  $('#setupCard').hidden = !!(st.claudeKey.trim() && st.ytKey.trim());
-  $('#genPanel').hidden = !Gen.busy;
-  if (Gen.busy) renderGen();
-  const showVisible = !!show && UI.showOpen;
-  $('#emptyCard').hidden = showVisible || Gen.busy;
-  $('#showArea').hidden = !showVisible;
-  $('#makeBtn').disabled = Gen.busy;
-  $('#newShowBtn').disabled = Gen.busy;
-  if (!showVisible) {
-    $('#openLastBtn').hidden = !(show || S.shows[0]);
-    const names = activeHosts().map(h => h.name);
-    const crew = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : (names[0] || 'Your host');
-    $('#emptyLede').textContent = `${crew} will pick today's songs${st.briefingOn ? ' and check the week in hip-hop' : ''}. It takes about a minute.`;
-    return;
-  }
-  const today = localDate(new Date());
-  $('#showDate').textContent = show.date === today ? `Today's show` : fmtDate(show.createdAt);
-  $('#showTitle').textContent = show.title || "Today's show";
-  renderNow(show);
-  renderBrief(show);
-  renderLineup(show);
-  const played = show.tracks.filter(t => t.status === 'played').length;
-  $('#showMeta').textContent = `${show.tracks.length} songs, ${played} played${show.cost ? `. Cost ${fmtCost(show.cost)}` : ''}`;
-}
-
-function renderNowOnly() { const s = currentShow(); if (s && UI.showOpen) renderNow(s); renderMini(); }
-
-const chipHTML = (id, on) => { const h = hostById(id); return h ? `<span class="hchip${on ? ' on' : ''}" style="--hc:${h.color}"><span class="hdot"></span>${esc(h.name)}</span>` : ''; };
-const lineHTML = (l, live, thinking) => `<div class="line${live ? ' is-live' : ''}${thinking ? ' thinking' : ''}" style="--hc:${hc(l.host)}"><span class="who">${esc(hostName(l.host))}</span><p>${esc(l.say)}</p></div>`;
-
-function renderNow(show) {
-  const st = S.settings;
-  const active = !!(Eng.show && Eng.show.id === show.id && Eng.running);
-  const seg = active && Eng.i >= 0 ? Eng.segs[Eng.i] : null;
-  const live = active && !Eng.paused;
-  let label = '', summary = '', track = null, upNext = false, video = false, verdicts = false, mic = false;
-  let studio = [], speaking = null, lines = null, topic = '';
-  if (active && Eng.error) { label = 'Paused'; summary = Eng.error; }
-  else if (!active) {
-    studio = showHostIds(show);
-    if (show.done) { label = "That's the show"; summary = 'Thanks for listening. Make a new show whenever you want more.'; }
-    else if (show.progress > 0) { label = 'Paused'; summary = 'Pick up right where you left off.'; }
-    else {
-      const breaks = show.tracks.filter(t => t.topicAfter).length;
-      label = 'Ready when you are';
-      summary = `${show.tracks.length} songs${show.briefing ? ', the week in hip-hop' : ''}${breaks ? `, ${breaks} topic break${breaks > 1 ? 's' : ''}` : ''}, and this crew on the mic.`;
-    }
-  } else if (seg && (seg.kind === 'talk' || seg.kind === 'say')) {
-    label = Eng.paused ? 'Paused' : seg.label; mic = live && !!Eng.speaker;
-    studio = seg.kind === 'talk' ? seg.hosts : [seg.host];
-    speaking = Eng.speaker || Eng.thinking;
-    if (seg.kind === 'talk') {
-      lines = (seg.lines || []).slice(-3).map((l, i, a) => lineHTML(l, i === a.length - 1 && !Eng.thinking, false));
-      if (Eng.thinking && live) lines.push(lineHTML({ host: Eng.thinking, say: '…' }, true, true));
-    } else lines = Eng.saying ? [lineHTML(Eng.saying, true, false)] : [];
-    if (seg.type === 'topic') topic = seg.topic;
-    if (seg.ti != null) { track = show.tracks[seg.ti]; upNext = true; }
-  } else if (seg && seg.kind === 'track') {
-    label = Eng.paused ? 'Paused' : 'Now playing'; track = show.tracks[seg.ti]; video = true; verdicts = true;
-  }
-  $('#nowLabel').textContent = label;
-  $('#micDot').classList.toggle('on', mic);
-  $('#studio').hidden = !studio.length;
-  $('#studio').innerHTML = studio.map(id => chipHTML(id, id === speaking)).join('');
-  $('#topicLine').hidden = !topic; $('#topicLine').textContent = topic;
-  $('#convo').hidden = !lines;
-  if (lines) $('#convo').innerHTML = lines.join('');
-  $('#talkText').hidden = !!lines || !summary; $('#talkText').textContent = summary;
-  $('#trackInfo').hidden = !track;
-  if (track) {
-    const pick = track.pickedBy ? `${hostName(track.pickedBy)}'s pick` : '';
-    $('#tUp').hidden = !(upNext || pick);
-    $('#tUp').textContent = upNext ? (pick ? `Up next · ${pick}` : 'Up next') : pick;
-    $('#tTitle').textContent = track.title;
-    $('#tArtist').textContent = track.artist;
-    $('#tWhy').textContent = track.why || ''; $('#tWhy').hidden = !track.why;
-    $('#tLink').href = ytmLink(track);
-  }
-  $('#videoBox').hidden = !video;
-  if (!video) $('#tapHint').hidden = true;
-  $('#verdicts').hidden = !verdicts;
-  if (verdicts) $$('#verdicts .chip').forEach(c => { const on = track.verdict === c.dataset.verdict; c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); });
-  const pb = $('#playBtn');
-  if (active) pb.innerHTML = live ? ICON.pause + 'Pause' : ICON.play + 'Resume';
-  else pb.innerHTML = ICON.play + (show.done ? 'Play it again' : show.progress > 0 ? 'Resume' : 'Start the show');
-  $('#nextBtn').disabled = !active;
-}
-
-function renderBrief(show) {
-  const b = show.briefing, box = $('#briefBox');
-  box.hidden = !b;
-  if (!b) return;
-  $('#briefCount').textContent = `${b.items.length} ${b.items.length === 1 ? 'story' : 'stories'}`;
-  $('#briefBy').textContent = b.host ? `Read by ${hostName(b.host)}` : '';
-  $('#briefBy').hidden = !b.host;
-  $('#briefList').innerHTML = b.items.map(it => `<li><span class="cat">${esc(it.category)}</span><span class="hl">${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.headline)}</a>` : esc(it.headline)}</span>${it.detail ? `<span class="dt">${esc(it.detail)}</span>` : ''}</li>`).join('');
-}
-
-function renderLineup(show) {
-  const active = !!(Eng.show && Eng.show.id === show.id && Eng.running);
-  const seg = active ? Eng.segs[Eng.i] : null;
-  const cur = seg ? seg.ti : null;
-  $('#lineup').innerHTML = show.tracks.map((t, i) => {
-    const cls = ['row'];
-    if (cur === i) cls.push('is-now');
-    if (t.status === 'played' && cur !== i) cls.push('is-played');
-    if (t.status === 'missing') cls.push('is-missing');
-    const status = cur === i ? (seg.kind === 'track' ? 'Playing' : 'Up next') : t.status === 'missing' ? 'Not found' : '';
-    const pick = t.pickedBy ? ` · ${esc(hostName(t.pickedBy))}'s pick` : '';
-    return `<li class="${cls.join(' ')}" data-ti="${i}">
-      <span class="num">${pad2(i + 1)}</span>
-      <button class="row-main" data-act="jump" aria-label="Play ${esc(t.title)} by ${esc(t.artist)}"><span class="r-title">${esc(t.title)}</span><span class="r-artist">${esc(t.artist)}${pick}${status ? ` <span class="status">· ${status}</span>` : ''}</span></button>
-      <span class="tag${t.tag === 'new' ? ' new' : ''}">${esc(t.tag)}</span>
-      <button class="heart${t.verdict === 'love' ? ' on' : ''}" data-act="love" aria-label="Love ${esc(t.title)}" aria-pressed="${t.verdict === 'love'}">${ICON.heart}</button>
-    </li>`;
-  }).join('');
-}
-
 function renderMini() {
-  const show = Eng.show;
-  const vis = !!(show && Eng.running && UI.view !== 'air');
+  const vis = !!(Eng.on && UI.view !== 'air');
   $('#mini').hidden = !vis;
   document.body.classList.toggle('has-mini', vis);
   if (!vis) return;
-  const seg = Eng.segs[Eng.i];
-  let txt = `${S.settings.station}`;
-  if (seg && seg.kind === 'track') { const t = show.tracks[seg.ti]; txt = `${t.title} · ${t.artist}`; }
-  else if (Eng.speaker || Eng.thinking) txt = `${hostName(Eng.speaker || Eng.thinking)} on the mic`;
-  else if (seg) txt = seg.label;
+  let txt = Eng.block ? Eng.block.name : STN();
+  if (Eng.speaking) txt = `${hostName(Eng.speaking)} on the mic`;
+  else if (Eng.cur) txt = `${Eng.cur.title} · ${Eng.cur.artist}`;
+  else if (Eng.status) txt = Eng.status;
   $('#miniTxt').textContent = (Eng.paused ? 'Paused: ' : '') + txt;
   $('#miniPlay').textContent = Eng.paused ? 'Resume' : 'Pause';
 }
@@ -1602,17 +2134,17 @@ function renderHistory() {
   $$('#histSeg button').forEach(b => { const on = b.dataset.h === UI.histTab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
   const el = $('#histList');
   if (UI.histTab === 'shows') {
-    if (!S.shows.length) { el.innerHTML = '<p class="lede">Your shows will collect here, with their songs, the news, and what you loved.</p>'; return; }
-    el.innerHTML = '<div class="hist">' + S.shows.map(s => {
-      const played = s.tracks.filter(t => t.status === 'played').length;
-      return `<details class="hshow"><summary><span class="h-title">${esc(s.title || 'Show')}</span><span class="h-meta">${esc(fmtDate(s.createdAt))} · ${s.tracks.length} songs · ${played} played${s.cost ? ` · ${fmtCost(s.cost)}` : ''}</span></summary>
-        <ul class="htracks">${s.tracks.map(t => `<li><span class="tt">${t.verdict === 'love' ? '<span style="color:var(--live)">♥</span> ' : ''}${esc(t.title)} <span class="muted">· ${esc(t.artist)}${t.pickedBy ? ` · ${esc(hostName(t.pickedBy))}` : ''}</span></span><a class="ytm" href="${esc(ytmLink(t))}" target="_blank" rel="noopener">YouTube Music</a></li>`).join('')}</ul>
-        <button class="btn small" data-open="${esc(s.id)}">Open this show</button></details>`;
+    const list = S.sessions.filter(s => s.tracks.length);
+    if (!list.length) { el.innerHTML = '<p class="lede">Every show you tune into lands here, with its songs and what you loved.</p>'; return; }
+    el.innerHTML = '<div class="hist">' + list.map(s => {
+      const when = s.startedAt ? `${fmtDate(s.startedAt)}, ${fmtClock(new Date(s.startedAt))}` : s.date;
+      return `<details class="hshow"><summary><span class="h-title">${esc(s.name || 'Show')}</span><span class="h-meta">${esc(when)} · ${s.tracks.length} song${s.tracks.length === 1 ? '' : 's'}${s.cost ? ` · ${esc(fmtCost(s.cost))}` : ''}</span></summary>
+        <ul class="htracks">${s.tracks.map(t => `<li><span class="tt">${t.verdict === 'love' ? '<span style="color:var(--live)">♥</span> ' : ''}${esc(t.title)} <span class="muted">· ${esc(t.artist)}${t.request ? ' · your request' : t.pickedBy ? ` · ${esc(hostName(t.pickedBy))}` : ''}</span></span><a class="ytm" href="${esc(ytmLink(t))}" target="_blank" rel="noopener">YouTube Music</a></li>`).join('')}</ul></details>`;
     }).join('') + '</div>';
   } else {
     const loved = S.feedback.filter(f => f.verdict === 'love' || f.verdict === 'more');
     if (!loved.length) { el.innerHTML = '<p class="lede">Tap the heart or Love it on a song and it lands here, with a link to add it in YouTube Music.</p>'; return; }
-    el.innerHTML = '<ul class="htracks loved">' + loved.map(f => `<li data-k="${esc(f.k)}"><span class="tt">${esc(f.title)} <span class="muted">· ${esc(f.artist)}${f.verdict === 'more' ? ' · wanted more like it' : ''}</span></span><span class="btnrow" style="flex-wrap:nowrap;gap:12px"><a class="ytm" href="${esc(ytmLink(f))}" target="_blank" rel="noopener">YouTube Music</a><button class="btn small ghost" data-unlove="${esc(f.k)}">Remove</button></span></li>`).join('') + '</ul>';
+    el.innerHTML = '<ul class="htracks loved">' + loved.map(f => `<li><span class="tt">${esc(f.title)} <span class="muted">· ${esc(f.artist)}${f.verdict === 'more' ? ' · wanted more like it' : ''}</span></span><span class="btnrow" style="flex-wrap:nowrap;gap:12px"><a class="ytm" href="${esc(ytmLink(f))}" target="_blank" rel="noopener">YouTube Music</a><button class="btn small ghost" data-unlove="${esc(f.k)}">Remove</button></span></li>`).join('') + '</ul>';
   }
 }
 
@@ -1625,13 +2157,20 @@ function go(view) {
   $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === view));
   if (view === 'history') renderHistory();
   if (view === 'settings') fillSettings();
+  if (view === 'air') renderAir();
   renderMini();
   window.scrollTo(0, 0);
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'trackCount', 'mix', 'briefingOn', 'briefFocus', 'topics', 'topicBreaks', 'houseRules', 'voiceOn', 'directorModel'];
+const FIELDS = ['claudeKey', 'ytKey', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'briefingOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const KEY_FIELDS = ['claudeKey', 'ytKey', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
+function applyVoiceClass() {
+  const m = voiceMode();
+  document.body.classList.toggle('vm-natural', m === 'natural');
+  document.body.classList.toggle('vm-phone', m === 'phone');
+}
 function fillSettings() {
   for (const f of FIELDS) {
     const el = $('#s-' + f); if (!el) continue;
@@ -1640,26 +2179,31 @@ function fillSettings() {
   }
   $('#originCode').textContent = (location.origin && location.origin !== 'null' ? location.origin : 'https://your-name.github.io') + '/*';
   if (!(S.settings.claudeKey && S.settings.ytKey)) $('#guide').open = true;
+  applyVoiceClass();
+  renderShowsEditor();
   renderHostsEditor();
 }
 function onSettingInput(e) {
   const el = e.target;
-  if (el.closest('#hostsEd')) return;
-  const f = el.id && el.id.replace(/^s-/, '');
+  if (el.closest('#hostsEd') || el.closest('#showsEd') || !el.id || !el.id.startsWith('s-')) return;
+  const f = el.id.replace(/^s-/, '');
   if (!FIELDS.includes(f)) return;
   let v = el.type === 'checkbox' ? el.checked : el.value;
-  if (f === 'trackCount' || f === 'topicBreaks') v = Number(v);
-  if (f === 'claudeKey' || f === 'ytKey') v = String(v).trim();
+  if (KEY_FIELDS.includes(f)) v = String(v).trim();
   S.settings[f] = v;
+  if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') Voice.naturalBroken = null;
+  if (f === 'voiceMode') applyVoiceClass();
   saveSoon(); renderHeader();
-  if (f === 'claudeKey' || f === 'ytKey' || f === 'briefingOn') renderAir();
+  if (KEY_FIELDS.includes(f) || f === 'briefingOn' || f === 'listener') renderAir();
 }
 
 const fmtX = v => `${Number(v || 1).toFixed(2).replace(/0$/, '')}x`;
 function hostMeta(h) {
-  const bits = [modelName(h.model || HAIKU).replace(' 5.5', '')];
-  if (S.settings.newsHost === h.id) bits.push('news');
+  const shows = sched().filter(b => (b.hosts || []).includes(h.id)).map(b => b.name);
+  const bits = [];
   if (!h.enabled) bits.push('off');
+  else bits.push(shows.length ? `${shows.length} show${shows.length > 1 ? 's' : ''}` : 'no shows');
+  if (S.settings.newsHost === h.id) bits.push('news');
   return bits.join(' · ');
 }
 function renderHostsEditor() {
@@ -1668,7 +2212,8 @@ function renderHostsEditor() {
   const vs = englishVoices();
   ed.innerHTML = hosts().map(h => {
     const id = esc(h.id), p = `h-${id}-`;
-    const voiceOpts = '<option value="">Automatic</option>' + vs.map(v => `<option value="${esc(v.name)}"${v.name === h.voiceName ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    const phoneOpts = '<option value="">Automatic</option>' + vs.map(v => `<option value="${esc(v.name)}"${v.name === h.voiceName ? ' selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('');
+    const gOpts = GVOICES.map(([n, d, g]) => `<option value="${n}"${gvoiceOf(h) === n ? ' selected' : ''}>${n}, ${d} (${g === 'f' ? 'female' : 'male'})</option>`).join('');
     const modelOpts = MODEL_OPTS.map(([v, n]) => `<option value="${v}"${(h.model || HAIKU) === v ? ' selected' : ''}>${n}</option>`).join('');
     const nb = (h.notebook || []).length ? `<ul>${h.notebook.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '<p class="note" style="margin-top:6px">Empty until after ' + esc(h.name) + "'s first show.</p>";
     return `<details class="hostcard${h.enabled ? '' : ' off'}" data-hid="${id}"${openIds.has(h.id) ? ' open' : ''}>
@@ -1679,13 +2224,15 @@ function renderHostsEditor() {
           <label class="f" for="${p}model">Model<select id="${p}model" data-hf="model">${modelOpts}</select></label>
         </div>
         <label class="f" for="${p}personality">Personality and music lane<textarea id="${p}personality" data-hf="personality">${esc(h.personality)}</textarea></label>
-        <label class="f" for="${p}voiceName">Voice<select id="${p}voiceName" data-hf="voiceName">${voiceOpts}</select></label>
-        <div class="two">
+        <label class="f only-natural" for="${p}gvoice">Voice<select id="${p}gvoice" data-hf="gvoice">${gOpts}</select></label>
+        <label class="f only-natural" for="${p}grate">Speed <span class="muted" data-out="grate">${fmtX(h.grate)}</span><input type="range" id="${p}grate" data-hf="grate" min="0.85" max="1.2" step="0.01" value="${Number(h.grate) || 1}"></label>
+        <label class="f only-phone" for="${p}voiceName">Phone voice<select id="${p}voiceName" data-hf="voiceName">${phoneOpts}</select></label>
+        <div class="two only-phone">
           <label class="f" for="${p}pitch">Pitch <span class="muted" data-out="pitch">${fmtX(h.pitch)}</span><input type="range" id="${p}pitch" data-hf="pitch" min="0.6" max="1.5" step="0.05" value="${Number(h.pitch) || 1}"></label>
           <label class="f" for="${p}rate">Speed <span class="muted" data-out="rate">${fmtX(h.rate)}</span><input type="range" id="${p}rate" data-hf="rate" min="0.8" max="1.3" step="0.05" value="${Number(h.rate) || 1}"></label>
         </div>
         <label class="switch" for="${p}enabled">On the roster<input type="checkbox" id="${p}enabled" data-hf="enabled"${h.enabled ? ' checked' : ''}></label>
-        <label class="switch" for="${p}news">Reads the news<input type="radio" name="newsHost" id="${p}news" data-hf="news"${S.settings.newsHost === h.id ? ' checked' : ''}></label>
+        <label class="switch" for="${p}news">Runs the news desk<input type="radio" name="newsHost" id="${p}news" data-hf="news"${S.settings.newsHost === h.id ? ' checked' : ''}></label>
         <div class="notebook"><span class="eyebrow">${esc(h.name)}'s notebook</span>${nb}</div>
         <div class="btnrow">
           <button type="button" class="btn small" data-hact="hear">Hear ${esc(h.name)}</button>
@@ -1704,11 +2251,65 @@ function onHostInput(e) {
     if (!el.checked && activeHosts().length <= 1) { el.checked = true; toast('Keep at least one host on the roster.'); return; }
     h.enabled = el.checked; card.classList.toggle('off', !h.enabled);
   }
-  else if (f === 'pitch' || f === 'rate') { h[f] = Number(el.value); const o = card.querySelector(`[data-out="${f}"]`); if (o) o.textContent = fmtX(el.value); }
+  else if (f === 'pitch' || f === 'rate' || f === 'grate') { h[f] = Number(el.value); const o = card.querySelector(`[data-out="${f}"]`); if (o) o.textContent = fmtX(el.value); }
   else h[f] = el.value;
   if (f === 'name') card.querySelector('.hname').textContent = el.value || 'Unnamed host';
   $$('#hostsEd .hostcard').forEach(c => { const x = hostById(c.dataset.hid); if (x) c.querySelector('.hmeta').textContent = hostMeta(x); });
   saveSoon();
+  if (f === 'name' || f === 'enabled') { renderShowsEditor(); renderAir(); }
+}
+async function previewHost(h) {
+  const text = `What's good ${L()}, it's ${h.name}, live on ${STN()}.`;
+  if (voiceMode() === 'natural') {
+    try { unlockAudio(); const url = await synth(text, h); await playUrl(url); return; }
+    catch (e) { toast(e.message || "Couldn't play the natural voice."); return; }
+  }
+  if (!('speechSynthesis' in window)) { toast("This browser can't read text out loud."); return; }
+  speakPhone(text, h);
+}
+
+function showMeta(b) { return `${fmtHour(b.start)} · ${blockHosts(b).length} host${blockHosts(b).length === 1 ? '' : 's'}`; }
+function renderShowsEditor() {
+  const ed = $('#showsEd'); if (!ed) return;
+  const openIds = new Set($$('#showsEd details[open]').map(d => d.dataset.sid));
+  const hourOpts = cur => Array.from({ length: 24 }, (_, i) => `<option value="${i}"${Number(cur) === i ? ' selected' : ''}>${fmtHour(i)}</option>`).join('');
+  ed.innerHTML = sched().map(b => {
+    const id = esc(b.id), p = `sh-${id}-`;
+    const talkOpts = TALK_LEVELS.map(([v, n]) => `<option value="${v}"${(b.talk || 'balanced') === v ? ' selected' : ''}>${n}</option>`).join('');
+    const hostBoxes = hosts().map(h => `<label><input type="checkbox" data-sf="host" value="${esc(h.id)}"${(b.hosts || []).includes(h.id) ? ' checked' : ''}${h.enabled ? '' : ' disabled'}><span class="hdot" style="--hc:${esc(h.color)}"></span>${esc(h.name)}</label>`).join('');
+    return `<details class="hostcard" data-sid="${id}"${openIds.has(b.id) ? ' open' : ''}>
+      <summary><span class="hname">${esc(b.name)}</span><span class="hmeta">${esc(showMeta(b))}</span></summary>
+      <div class="hostbody">
+        <div class="two">
+          <label class="f" for="${p}name">Show name<input type="text" id="${p}name" data-sf="name" value="${esc(b.name)}"></label>
+          <label class="f" for="${p}start">Starts at<select id="${p}start" data-sf="start">${hourOpts(b.start)}</select></label>
+        </div>
+        <label class="f" for="${p}talk">How much talk<select id="${p}talk" data-sf="talk">${talkOpts}</select></label>
+        <label class="f" for="${p}about">What it plays and how it feels<textarea id="${p}about" data-sf="about">${esc(b.about)}</textarea></label>
+        <div class="f"><span>Hosts</span><div class="pickhosts">${hostBoxes}</div></div>
+        <div class="btnrow"><button type="button" class="btn small ghost" data-sact="remove" id="${p}remove">Remove show</button></div>
+      </div>
+    </details>`;
+  }).join('');
+}
+function onShowInput(e) {
+  const el = e.target, f = el.dataset.sf; if (!f) return;
+  const card = el.closest('[data-sid]'); const b = card && S.settings.schedule.find(x => x.id === card.dataset.sid); if (!b) return;
+  if (f === 'host') {
+    const set = new Set(b.hosts || []);
+    if (el.checked) set.add(el.value); else set.delete(el.value);
+    if (!set.size) { el.checked = true; toast('Every show needs at least one host.'); return; }
+    b.hosts = hosts().map(h => h.id).filter(id => set.has(id));
+  } else if (f === 'start') {
+    const v = Number(el.value);
+    if (S.settings.schedule.some(x => x !== b && x.start === v)) { el.value = b.start; toast('Another show already starts then.'); return; }
+    b.start = v;
+  } else b[f] = el.value;
+  if (f === 'name') card.querySelector('.hname').textContent = el.value || 'Untitled show';
+  card.querySelector('.hmeta').textContent = showMeta(b);
+  saveSoon(); renderAir();
+  $$('#hostsEd .hostcard').forEach(c => { const x = hostById(c.dataset.hid); if (x) c.querySelector('.hmeta').textContent = hostMeta(x); });
+  if (f === 'start' && e.type === 'change') renderShowsEditor();
 }
 
 async function testKeys() {
@@ -1727,20 +2328,144 @@ async function testKeys() {
     if (!key) throw new UserError('Add your YouTube API key first.');
     const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '1', q: 'Lucky Daye Roll Some Mo', key }));
     const d = await r.json().catch(() => null);
-    if (!r.ok) throw new UserError(ytErr(r.status, d));
+    if (!r.ok) throw new UserError(ytErr(r.status, d).msg);
     res.push(line(true, 'YouTube key'));
   } catch (e) { res.push(line(false, e.message || "Couldn't reach YouTube.")); }
+  if (voiceMode() === 'natural') {
+    try { await synth('Test.', anchorHost()); Voice.naturalBroken = null; res.push(line(true, 'Natural voices')); }
+    catch (e) { res.push(line(false, `Natural voices: ${e.message}`)); }
+  }
   out.innerHTML = res.join('');
   $('#testBtn').disabled = false;
+  renderAir();
+}
+
+/* ---------- sync link ---------- */
+const b64u = {
+  enc(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); },
+  dec(str) { str = String(str).replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; const bin = atob(str), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i); return u8; }
+};
+const pipeBytes = async (u8, ts) => new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(ts)).arrayBuffer());
+async function syncKey(pin, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+// Only what differs from the built-in defaults goes in the link, so it stays short enough for a QR code.
+const sameJSON = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function diffFrom(obj, def) { const out = {}; Object.keys(obj).forEach(k => { if (!def || !sameJSON(obj[k], def[k])) out[k] = obj[k]; }); return out; }
+function packList(list, defs) { return list.map(x => { const d = defs.find(y => y.id === x.id); return d ? { id: x.id, ...diffFrom(x, d) } : x; }); }
+function unpackList(list, defs) { return list.map(x => { const d = defs.find(y => y.id === x.id); return d ? { ...clone(d), ...x } : x; }); }
+function syncPayload(withTaste) {
+  const st = clone(S.settings), out = {};
+  Object.keys(st).forEach(k => { if (k !== 'hosts' && k !== 'schedule' && !sameJSON(st[k], DEFAULT_SETTINGS[k])) out[k] = st[k]; });
+  out.hosts = packList(st.hosts, DEFAULT_HOSTS);
+  out.schedule = packList(st.schedule, DEFAULT_SCHEDULE);
+  const d = { v: 2, settings: out };
+  if (withTaste) {
+    d.feedback = S.feedback.slice(0, 120).map(f => [f.artist, f.title, f.verdict, f.at]);
+    d.played = S.played.slice(0, 40).map(p => [p.artist, p.title, p.at]);
+  }
+  return d;
+}
+async function packSync(obj, pin) {
+  if (!window.crypto || !crypto.subtle) throw new UserError('This browser can only make sync links on a secure (https) page.');
+  let bytes = new TextEncoder().encode(JSON.stringify(obj)), flag = 0;
+  if ('CompressionStream' in window) { try { bytes = await pipeBytes(bytes, new CompressionStream('deflate-raw')); flag = 1; } catch (e) {} }
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await syncKey(pin, salt);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes));
+  const out = new Uint8Array(2 + 16 + 12 + ct.length);
+  out.set([1, flag], 0); out.set(salt, 2); out.set(iv, 18); out.set(ct, 30);
+  return b64u.enc(out);
+}
+async function unpackSync(code, pin) {
+  if (!window.crypto || !crypto.subtle) throw new UserError('Open this on the https link to unlock it.');
+  let u8;
+  try { u8 = b64u.dec(code); } catch (e) { throw new UserError("That sync link looks cut off. Copy the whole link and try again."); }
+  if (u8.length < 31 || u8[0] !== 1) throw new UserError("That sync link looks cut off. Copy the whole link and try again.");
+  const salt = u8.slice(2, 18), iv = u8.slice(18, 30), ct = u8.slice(30);
+  let bytes;
+  try { bytes = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, await syncKey(pin, salt), ct)); }
+  catch (e) { throw new UserError("That PIN doesn't unlock this link. Try again."); }
+  if (u8[1] === 1) {
+    if (!('DecompressionStream' in window)) throw new UserError('This browser is too old to open sync links. Try Chrome.');
+    bytes = await pipeBytes(bytes, new DecompressionStream('deflate-raw'));
+  }
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+function applySync(d) {
+  if (!d || !d.settings) throw new UserError("That link doesn't have a station in it.");
+  if (Eng.on) haltAir();
+  const inc = d.settings;
+  const settings = { ...clone(DEFAULT_SETTINGS), ...inc };
+  settings.hosts = migrateHosts(Array.isArray(inc.hosts) && inc.hosts.length ? unpackList(inc.hosts, DEFAULT_HOSTS) : clone(DEFAULT_HOSTS));
+  settings.schedule = Array.isArray(inc.schedule) && inc.schedule.length ? unpackList(inc.schedule, DEFAULT_SCHEDULE) : clone(DEFAULT_SCHEDULE);
+  S.settings = settings;
+  const fb = Array.isArray(d.feedback) ? d.feedback.map(f => Array.isArray(f) ? { artist: f[0], title: f[1], verdict: f[2], at: f[3] } : f) : null;
+  const pl = Array.isArray(d.played) ? d.played.map(p => Array.isArray(p) ? { artist: p[0], title: p[1], at: p[2] } : p) : null;
+  if (fb) {
+    const m = new Map();
+    [...fb.map(f => ({ ...f, k: trackKey(f) })), ...S.feedback].forEach(f => { const o = m.get(f.k); if (!o || (f.at || 0) > (o.at || 0)) m.set(f.k, f); });
+    S.feedback = [...m.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 500);
+  }
+  if (pl) {
+    const m = new Map();
+    [...pl.map(p => ({ ...p, k: trackKey(p) })), ...S.played].forEach(p => { const o = m.get(p.k); if (!o || (p.at || 0) > (o.at || 0)) m.set(p.k, p); });
+    S.played = [...m.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
+  }
+  Eng.block = null; Eng.session = null; Eng.upcoming = []; S.queue = null;
+  Voice.naturalBroken = null;
+  save(); fillSettings(); renderAll();
+}
+const Sync = { pending: null };
+function syncCodeFrom(text) { const m = String(text || '').match(/[#&]sync=([A-Za-z0-9_-]+)/); return m ? m[1] : null; }
+function showSyncIn(code) {
+  Sync.pending = code;
+  $('#syncIn').hidden = false; $('#syncInPin').value = '';
+  go('air');
+  setTimeout(() => $('#syncInPin').focus(), 50);
+}
+function clearSyncHash() { if (/sync=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search); }
+async function makeSyncLink() {
+  const pin = $('#syncPin').value;
+  if (pin.length < 6) { toast('Pick a PIN with at least 6 letters or numbers.'); $('#syncPin').focus(); return; }
+  if (!S.settings.claudeKey.trim()) { toast('Add your keys first, so there is something to send.'); return; }
+  $('#syncMake').disabled = true;
+  try {
+    const code = await packSync(syncPayload($('#syncTaste').checked), pin);
+    const link = `${location.origin}${location.pathname}#sync=${code}`;
+    $('#syncOut').hidden = false; $('#syncLink').value = link;
+    $('#syncShare').hidden = !navigator.share;
+    const qr = $('#syncQR'), note = $('#syncQRNote');
+    qr.hidden = true; qr.innerHTML = '';
+    note.textContent = 'Send the link to yourself, open it on the other device, and type the same PIN.';
+    if (link.length <= 2300) {
+      try {
+        if (!window.qrcode) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js');
+        const q = window.qrcode(0, 'L'); q.addData(link); q.make();
+        qr.innerHTML = `<img alt="QR code for the sync link" src="${q.createDataURL(4, 8)}">`;
+        qr.hidden = false;
+        note.textContent = 'Scan this with the other phone, or send yourself the link. Then type the same PIN there.';
+      } catch (e) {}
+    } else note.textContent = 'This link is too long for a QR code. Send it to yourself, open it on the other device, and type the same PIN. Turning off loved songs makes it short enough for a QR code.';
+  } catch (e) { toast(e.message || "Couldn't make the link."); }
+  finally { $('#syncMake').disabled = false; }
+}
+function loadScript(src) {
+  return new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) { const el = $('#syncLink'); el.focus(); el.select(); try { return document.execCommand('copy'); } catch (x) { return false; } }
 }
 
 /* ---------- data ---------- */
 function exportData() {
-  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '' } };
+  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '', ttsKey: '' } };
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `lune-fm-backup-${localDate(new Date())}.json`;
+  a.download = `lune-fm-backup-${today()}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   toast('Backup saved to your downloads.');
@@ -1750,11 +2475,12 @@ function importData(file) {
   r.onload = () => {
     try {
       const d = JSON.parse(r.result);
-      if (!d || !Array.isArray(d.shows) || !d.settings) throw new Error('shape');
-      stopEverything();
-      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey };
+      if (!d || !d.settings || !(Array.isArray(d.sessions) || Array.isArray(d.shows))) throw new Error('shape');
+      if (Eng.on) haltAir();
+      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey, ttsKey: S.settings.ttsKey };
       localStorage.setItem(LS_KEY, JSON.stringify({ ...d, settings: { ...d.settings, ...keep } }));
       S = loadState();
+      Eng.block = null; Eng.session = null; Eng.upcoming = [];
       save(); fillSettings(); renderAll();
       toast('Backup restored.');
     } catch (e) { toast("That file isn't a Lune FM backup."); }
@@ -1776,53 +2502,41 @@ document.addEventListener('click', e => {
   const tab = e.target.closest('.tab');
   if (tab) { go(tab.dataset.view); return; }
 });
-$('#makeBtn').addEventListener('click', makeShow);
-$('#newShowBtn').addEventListener('click', () => {
-  const show = currentShow();
-  const inProgress = show && !show.done && (show.progress > 0 || (Eng.running && Eng.show === show));
-  if (inProgress && !armed('newShowBtn', 'Tap again to make a new show')) return;
-  $('#newShowBtn').textContent = 'Make a new show';
-  makeShow();
-});
-$('#openLastBtn').addEventListener('click', () => {
-  if (!currentShow() && S.shows[0]) S.currentShowId = S.shows[0].id;
-  UI.showOpen = true; save(); renderAll();
-});
-$('#playBtn').addEventListener('click', startOrToggle);
-$('#nextBtn').addEventListener('click', next);
-$('#miniPlay').addEventListener('click', startOrToggle);
+$('#tuneBtn').addEventListener('click', tuneIn);
+$('#playBtn').addEventListener('click', togglePlay);
+$('#miniPlay').addEventListener('click', togglePlay);
+$('#skipBtn').addEventListener('click', skip);
 $('#verdicts').addEventListener('click', e => {
-  const c = e.target.closest('[data-verdict]'); if (!c || !Eng.show) return;
-  const seg = Eng.segs[Eng.i]; if (!seg || seg.ti == null) return;
-  const t = Eng.show.tracks[seg.ti];
-  setVerdict(t, c.dataset.verdict);
-  invalidateNextTalk();
-  if (t.verdict === 'skip') next(); else renderAll();
+  const c = e.target.closest('[data-verdict]'); if (!c || !Eng.cur) return;
+  setVerdict(Eng.cur, c.dataset.verdict);
 });
-$('#lineup').addEventListener('click', e => {
-  const btn = e.target.closest('[data-act]'); if (!btn) return;
-  const ti = Number(btn.closest('[data-ti]').dataset.ti);
-  const show = currentShow(); if (!show) return;
-  if (btn.dataset.act === 'love') { setVerdict(show.tracks[ti], 'love'); if (Eng.segs[Eng.i] && Eng.segs[Eng.i].ti === ti) invalidateNextTalk(); renderAll(); }
-  else jumpTo(ti);
+$('#upList').addEventListener('click', e => {
+  const b = e.target.closest('[data-act="now"]'); if (!b) return;
+  const t = Eng.upcoming[Number(b.closest('[data-up]').dataset.up)];
+  if (t) playNow(t);
 });
+$('#playedList').addEventListener('click', e => {
+  const b = e.target.closest('[data-act="love"]'); if (!b) return;
+  const t = playedToday()[Number(b.closest('[data-played]').dataset.played)];
+  if (t) setVerdict(t, 'love');
+});
+$('#reqForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#reqInput').value; $('#reqInput').value = ''; $('#reqInput').blur(); sendRequest(v); });
 $('#histSeg').addEventListener('click', e => { const b = e.target.closest('[data-h]'); if (!b) return; UI.histTab = b.dataset.h; renderHistory(); });
 $('#histList').addEventListener('click', e => {
-  const open = e.target.closest('[data-open]');
-  if (open) { stopEverything(); S.currentShowId = open.dataset.open; UI.showOpen = true; save(); go('air'); renderAll(); return; }
   const un = e.target.closest('[data-unlove]');
-  if (un) {
-    const k = un.dataset.unlove;
-    S.feedback = S.feedback.filter(f => f.k !== k);
-    S.shows.forEach(s => s.tracks.forEach(t => { if (trackKey(t) === k && (t.verdict === 'love' || t.verdict === 'more')) t.verdict = null; }));
-    save(); renderHistory();
-  }
+  if (!un) return;
+  const k = un.dataset.unlove;
+  S.feedback = S.feedback.filter(f => f.k !== k);
+  S.sessions.forEach(s => s.tracks.forEach(t => { if (trackKey(t) === k && (t.verdict === 'love' || t.verdict === 'more')) t.verdict = null; }));
+  save(); renderHistory();
 });
 $('#settingsForm').addEventListener('input', onSettingInput);
 $('#settingsForm').addEventListener('change', onSettingInput);
 $('#settingsForm').addEventListener('submit', e => e.preventDefault());
 $('#hostsEd').addEventListener('input', onHostInput);
 $('#hostsEd').addEventListener('change', onHostInput);
+$('#showsEd').addEventListener('input', onShowInput);
+$('#showsEd').addEventListener('change', onShowInput);
 $('#hostsEd').addEventListener('click', e => {
   const b = e.target.closest('[data-hact]'); if (!b) return;
   const card = b.closest('[data-hid]'); const h = card && hostById(card.dataset.hid); if (!h) return;
@@ -1834,16 +2548,35 @@ $('#hostsEd').addEventListener('click', e => {
     if (hosts().length <= 1 || (h.enabled && activeHosts().length <= 1)) { toast('Keep at least one host on the roster.'); return; }
     if (!armed(b.id, `Tap again to remove ${h.name}`)) return;
     S.settings.hosts = hosts().filter(x => x.id !== h.id);
+    S.settings.schedule.forEach(sh => { sh.hosts = (sh.hosts || []).filter(id => id !== h.id); });
     if (S.settings.newsHost === h.id) S.settings.newsHost = anchorHost().id;
-    save(); renderHostsEditor(); toast(`${h.name} left the station.`);
+    save(); renderHostsEditor(); renderShowsEditor(); renderAir(); toast(`${h.name} left the station.`);
   }
+});
+$('#showsEd').addEventListener('click', e => {
+  const b = e.target.closest('[data-sact]'); if (!b) return;
+  const card = b.closest('[data-sid]'); const sh = card && S.settings.schedule.find(x => x.id === card.dataset.sid); if (!sh) return;
+  if (S.settings.schedule.length <= 1) { toast('Keep at least one show on the schedule.'); return; }
+  if (!armed(b.id, `Tap again to remove ${sh.name}`)) return;
+  S.settings.schedule = S.settings.schedule.filter(x => x !== sh);
+  save(); renderShowsEditor(); renderHostsEditor(); renderAir(); toast(`${sh.name} is off the schedule.`);
+});
+$('#addShow').addEventListener('click', () => {
+  if (S.settings.schedule.length >= 12) { toast('Twelve shows is the max.'); return; }
+  const used = new Set(S.settings.schedule.map(x => x.start));
+  let start = 0; for (let i = 0; i < 24; i++) { const hh = (new Date().getHours() + 1 + i) % 24; if (!used.has(hh)) { start = hh; break; } }
+  const sh = { id: 'sh' + Date.now().toString(36), name: 'New show', start, hosts: [anchorHost().id], talk: 'balanced', about: 'Describe what this show plays and how it feels.' };
+  S.settings.schedule.push(sh); save(); renderShowsEditor(); renderAir();
+  const card = $(`#showsEd [data-sid="${sh.id}"]`); if (card) { card.open = true; card.scrollIntoView({ block: 'center' }); }
 });
 $('#addHost').addEventListener('click', () => {
   if (hosts().length >= 8) { toast('Eight hosts is the max.'); return; }
   const used = new Set(hosts().map(h => h.color));
   const color = HOST_COLORS.find(c => !used.has(c)) || HOST_COLORS[hosts().length % HOST_COLORS.length];
-  const h = { id: 'h' + Date.now().toString(36), name: 'New host', color, model: HAIKU, enabled: true, voiceName: '', pitch: 1, rate: 1, notebook: [],
-    personality: 'Describe who this host is, how they talk, and their music lane.' };
+  const usedV = new Set(hosts().map(h => h.gvoice));
+  const gv = (GVOICES.find(v => !usedV.has(v[0])) || GVOICES[0])[0];
+  const h = { id: 'h' + Date.now().toString(36), name: 'New host', color, model: HAIKU, enabled: true, gvoice: gv, grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [],
+    personality: 'Describe who this host is, how they talk, and their music lane. Then add them to a show above.' };
   hosts().push(h); save(); renderHostsEditor();
   const card = $(`#hostsEd [data-hid="${h.id}"]`); if (card) { card.open = true; card.scrollIntoView({ block: 'center' }); }
 });
@@ -1852,36 +2585,64 @@ $$('[data-reveal]').forEach(b => b.addEventListener('click', () => {
   inp.type = show ? 'text' : 'password'; b.textContent = show ? 'Hide' : 'Show';
 }));
 $('#testBtn').addEventListener('click', testKeys);
+$('#syncMake').addEventListener('click', makeSyncLink);
+$('#syncCopy').addEventListener('click', async () => { toast(await copyText($('#syncLink').value) ? 'Link copied.' : 'Select the link and copy it.'); });
+$('#syncShare').addEventListener('click', () => { navigator.share({ title: `${STN()} sync link`, url: $('#syncLink').value }).catch(() => {}); });
+$('#syncPasteBtn').addEventListener('click', () => {
+  const code = syncCodeFrom($('#syncPaste').value);
+  if (!code) { toast("That doesn't look like a sync link."); return; }
+  $('#syncPaste').value = '';
+  showSyncIn(code);
+});
+async function unlockSync() {
+  if (!Sync.pending) return;
+  const pin = $('#syncInPin').value;
+  if (!pin) { $('#syncInPin').focus(); return; }
+  $('#syncInBtn').disabled = true;
+  try {
+    applySync(await unpackSync(Sync.pending, pin));
+    Sync.pending = null; $('#syncIn').hidden = true; clearSyncHash();
+    toast(`${STN()} is set up on this device.`);
+    renderAll();
+  } catch (e) { toast(e.message || "Couldn't open that link."); }
+  finally { $('#syncInBtn').disabled = false; }
+}
+$('#syncInBtn').addEventListener('click', unlockSync);
+$('#syncInPin').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); unlockSync(); } });
+$('#syncInCancel').addEventListener('click', () => { Sync.pending = null; $('#syncIn').hidden = true; clearSyncHash(); renderAir(); });
 $('#exportBtn').addEventListener('click', exportData);
 $('#importBtn').addEventListener('click', () => $('#importFile').click());
 $('#importFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) importData(f); e.target.value = ''; });
 $('#clearBtn').addEventListener('click', () => {
   if (!armed('clearBtn', 'Tap again to clear everything')) return;
   $('#clearBtn').textContent = 'Clear history';
-  stopEverything();
+  if (Eng.on) haltAir();
   S = { ...freshState(), settings: S.settings };
-  UI.showOpen = false; save(); renderAll();
-  toast('History cleared. Your settings, hosts and keys stayed.');
+  Eng.block = null; Eng.session = null; Eng.upcoming = [];
+  save(); renderAll();
+  toast('History cleared. Your settings, hosts, shows and keys stayed.');
 });
 if ('speechSynthesis' in window) {
   const onVoices = () => { if (UI.view === 'settings' && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('#hostsEd'))) renderHostsEditor(); };
   if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', onVoices);
   else speechSynthesis.onvoiceschanged = onVoices;
 }
-window.addEventListener('pagehide', save);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Eng.on && !Eng.paused) keepAwake(true); });
+window.addEventListener('pagehide', () => { persistQueue(); save(); });
+window.addEventListener('hashchange', () => { const c = syncCodeFrom(location.hash); if (c) showSyncIn(c); });
 
 /* ---------- boot ---------- */
-S.shows.forEach(s => s.tracks.forEach(t => { if (t.status === 'playing') t.status = 'played'; }));
-if (!currentShow() && S.shows[0]) S.currentShowId = S.shows[0].id;
-const cs = currentShow();
-UI.showOpen = !!(cs && cs.date === localDate(new Date()));
+S.sessions.forEach(s => s.tracks.forEach(t => { if (t.status === 'playing') t.status = 'played'; }));
 fillSettings();
 go('air');
 renderAll();
+{ const c = syncCodeFrom(location.hash); if (c) showSyncIn(c); }
+setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { extractJSON, scoreVideo, chunks, cleanHost, buildSegments, norm, parseLine, lineContext, hostSystem, state: () => S, Eng };
+window.__lunefm = { extractJSON, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
 })();
+
 </script>
 </body>
 </html>
