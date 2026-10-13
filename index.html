@@ -211,6 +211,8 @@ code{font-family:var(--f-mono);font-size:.84em;background:var(--panel-2);padding
 .subhead{font:600 .66rem/1 var(--f-mono);letter-spacing:.13em;text-transform:uppercase;color:var(--faint);margin:4px 0 -4px}
 body:not(.vm-natural) .only-natural{display:none!important}
 body:not(.vm-phone) .only-phone{display:none!important}
+body:not(.vm-expressive) .only-expressive{display:none!important}
+body.vm-expressive .only-plain-natural{display:none!important}
 
 /* Host and show editors */
 .cards{display:grid;gap:10px}
@@ -454,10 +456,12 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f" for="s-voiceMode">How the hosts sound
           <select id="s-voiceMode">
             <option value="natural">Natural voices from Google</option>
+            <option value="expressive">Expressive voices from Google</option>
             <option value="phone">Phone voices</option>
             <option value="off">No voices, captions only</option>
           </select>
-          <small class="only-natural">Natural voices need the Cloud Text-to-Speech API turned on. If they stop working, the station switches to phone voices on its own.</small>
+          <small class="only-natural only-plain-natural">Natural voices need the Cloud Text-to-Speech API turned on. If they stop working, the station switches to phone voices on its own.</small>
+          <small class="only-expressive">Google's newer Gemini voices: the same voice names, but each host gets a style (set it under Hosts) and they can laugh, sigh and take pauses. Same key and same API. There's no free tier, so Google bills these from the first line, roughly 5 to 10 cents per hour of listening. The On air page shows what they cost each day. If they stop working, the station falls back to the regular natural voices.</small>
           <small class="only-phone">These come from your phone's text to speech. Pick a different voice, pitch and speed for each host.</small>
         </label>
       </fieldset>
@@ -593,6 +597,17 @@ const GVOICES = [
   ['Sulafat', 'warm', 'f'], ['Umbriel', 'easy-going', 'm'], ['Vindemiatrix', 'gentle', 'f'], ['Zephyr', 'bright', 'f'], ['Zubenelgenubi', 'casual', 'm']
 ];
 const DEFAULT_GVOICE = { jules: 'Algieba', dez: 'Puck', ada: 'Kore', milo: 'Fenrir', nova: 'Sulafat' };
+// how each host sounds, handed to the expressive voices as a style direction
+const DEFAULT_DELIVERY = {
+  jules: 'Smooth, warm late-night radio voice. Relaxed and unhurried, with a smile in it. Chuckles easily.',
+  dez: 'Hype hip-hop DJ energy. Loud, quick and playful. Laughs at his own jokes and gets worked up about a good beat.',
+  ada: 'Cool, calm and dry. Deadpan and low-key, with a sly little smile in her voice when she wins an argument.',
+  milo: 'Excited nerd energy. Quick and animated, and his voice climbs when he gets going on a tangent.',
+  nova: 'Soulful and a little dramatic, like reading poetry at a jazz bar. Slower, smoky and expressive.'
+};
+// Gemini voices on Google Cloud Text-to-Speech: same 30 voice names, plus a style prompt
+const GEM_MODEL = 'gemini-2.5-flash-tts';
+const GEM_PRICE = { textPerM: 0.50, audioPerM: 10, audioTokPerSec: 25 };
 
 const DEFAULT_HOSTS = [
   { id: 'jules', name: 'Jules', color: HOST_COLORS[0], model: HAIKU, enabled: true, gvoice: 'Algieba', grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [],
@@ -606,6 +621,7 @@ const DEFAULT_HOSTS = [
   { id: 'nova', name: 'Nova', color: HOST_COLORS[4], model: HAIKU, enabled: true, gvoice: 'Sulafat', grate: 0.96, voiceName: '', pitch: 0.88, rate: 0.95, notebook: [],
     personality: 'Old soul crate digger. Jazz, neo-soul and vinyl culture. Talks a little poetic and dramatic, and the others tease her for it. Secretly the funniest when she drops a one-liner. Music lane: jazz, neo-soul, jazz and hip-hop crossovers, classic soul samples.' }
 ];
+DEFAULT_HOSTS.forEach(h => { h.delivery = DEFAULT_DELIVERY[h.id] || ''; });
 const DEFAULT_SCHEDULE = [
   { id: 'wakeup', name: 'The Wake Up', start: 6, hosts: ['jules', 'dez', 'ada'], talk: 'chatty',
     about: 'The morning show. Full crew, good energy, lots of back and forth. A mix of favorites and new finds that builds from easy to upbeat.' },
@@ -640,6 +656,7 @@ function migrateHosts(list) {
   return list.map((h, i) => ({
     gvoice: DEFAULT_GVOICE[h.id] || GVOICES[(i * 7) % GVOICES.length][0], grate: 1,
     voiceName: '', pitch: 1, rate: 1, notebook: [], model: HAIKU, enabled: true,
+    delivery: DEFAULT_DELIVERY[h.id] || '',
     ...h
   }));
 }
@@ -682,10 +699,11 @@ function save() {
 let saveT = null;
 const saveSoon = () => { clearTimeout(saveT); saveT = setTimeout(save, 400); };
 let spendHook = null;
-function addSpend(c) {
+function addSpend(c, kind) {
   if (!c) return;
   const d = today();
   S.spend[d] = (S.spend[d] || 0) + c;
+  if (kind === 'voice') { S.vspend = S.vspend || {}; S.vspend[d] = (S.vspend[d] || 0) + c; Object.keys(S.vspend).sort().slice(0, -40).forEach(k => delete S.vspend[k]); }
   if (spendHook) spendHook(c);
   const keys = Object.keys(S.spend).sort();
   if (keys.length > 40) keys.slice(0, keys.length - 40).forEach(k => delete S.spend[k]);
@@ -1042,6 +1060,13 @@ async function genBriefing() {
 }
 
 /* ---------- host agents ---------- */
+// what the hosts may put in brackets depends on which voices read their lines
+function voiceRule() {
+  const m = S.settings.voiceMode || 'natural';
+  if (m === 'expressive') return '- An expressive voice engine reads your line out loud. You can put delivery tags in square brackets right where they happen, at most two per line, and only these: [laughing] [sigh] [uhm] [short pause] [long pause] [whispering] [sarcasm] [shouting]. Like: "Nah [laughing] he really flipped that sample on a drill beat." Use them when they fit, not on every line. No other brackets, no emojis, markdown or em dashes.';
+  if (m === 'natural') return '- A voice engine reads your line out loud. Where you would really take a beat, like before a punchline, you can write [short pause] or [long pause], at most one per line. No other brackets, no emojis, markdown or em dashes.';
+  return '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.';
+}
 const BANNED = ['buckle up', 'dive in', 'dive into', 'tapestry', 'journey', 'without further ado', 'folks', 'stay tuned', 'hidden gem', 'sonic', 'absolute banger', "let's get into it", 'you know what time it is', 'elevate', 'vibe check', 'ladies and gentlemen'];
 function hostSystem(h) {
   const st = S.settings;
@@ -1063,7 +1088,8 @@ function hostSystem(h) {
     '- Never announce a handoff ("over to you", "take it away", "what do you think, Dez?"). Just talk to the others by name when it is natural.',
     '- No greetings unless you are opening a show. No goodbyes unless you are closing one.',
     `- Never use these: ${BANNED.join(', ')}.`,
-    '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.',
+    "- Write for the ear. Let reactions, short fragments and punctuation carry the feeling and the rhythm, the way people really talk on air.",
+    voiceRule(),
     '- Any fact about a song or artist has to be true. If you are not sure, go for a joke or an opinion instead.',
     `- Call ${L()} only by that name. Never compare ${L()} to other people and never tell ${L()} to hurry.`,
     `- Speak only as ${h.name}. Never write lines for the others and never put your name in front of your line.`,
@@ -1137,16 +1163,17 @@ function parseLine(text, h) {
   let say = '', next = '';
   try { const d = extractJSON(text); say = String(d.say || ''); next = String(d.next || d.hand_to || ''); }
   catch (e) { say = String(text || '').replace(/[{}]/g, '').replace(/"?say"?\s*:\s*/i, '').replace(/"?(next|hand_to)"?\s*:.*$/is, ''); }
-  say = cleanHost(say.replace(/^["']|["']$/g, '').replace(new RegExp('^' + reEsc(h.name) + '\\s*:\\s*', 'i'), '').replace(/\[[^\]]*\]|\*[^*]*\*/g, ''));
-  return { say, next };
+  const raw = cleanHost(say.replace(/^["']|["']$/g, '').replace(new RegExp('^' + reEsc(h.name) + '\\s*:\\s*', 'i'), '').replace(/\*[^*]*\*/g, ''));
+  // "say" is what shows on screen and what the other hosts hear about; "speak" keeps the delivery tags for the voice
+  return { say: stripTags(raw), speak: keepTags(raw), next };
 }
 
 async function genTurn(hostId, job) {
   const h = hostById(hostId) || anchorHost();
   const r = await callClaude({ system: hostSystem(h), user: turnPrompt(h, job), maxTokens: 1500, model: h.model || HAIKU, effort: 'low' });
-  const { say, next } = parseLine(r.text, h);
+  const { say, speak, next } = parseLine(r.text, h);
   if (!say) { noteFail(`${h.name}'s line`, r, 'empty line'); throw new UserError('empty'); }
-  return { host: h.id, say, next: nameToId(next), cost: r.cost };
+  return { host: h.id, say, speak, next: nameToId(next), cost: r.cost };
 }
 
 const mentionsTrack = (say, t) => {
@@ -1301,16 +1328,17 @@ function onYTState(e) {
 }
 function onYTError() { if (Vid.pending) Vid.pending.finish('error'); }
 function setVol(v) { Vid.vol = Math.max(0, Math.min(100, Math.round(v))); try { player && player.setVolume(Vid.vol); } catch (e) {} }
+// Fades go by the clock, not by counting ticks: with the screen locked the browser may
+// only run timers once a second, and a fade should still finish on time.
 function fadeTo(target, ms) {
-  clearInterval(Vid.fadeT);
+  clearInterval(Vid.fadeT); Vid.fadeT = null;
   return new Promise(resolve => {
-    const from = Vid.vol, steps = Math.max(1, Math.round(ms / 60));
-    let i = 0;
+    const from = Vid.vol, t0 = Date.now();
     if (ms <= 0) { setVol(target); resolve(); return; }
     Vid.fadeT = setInterval(() => {
-      i++;
-      setVol(from + (target - from) * (i / steps));
-      if (i >= steps) { clearInterval(Vid.fadeT); Vid.fadeT = null; resolve(); }
+      const f = Math.min(1, (Date.now() - t0) / ms);
+      setVol(from + (target - from) * f);
+      if (f >= 1) { clearInterval(Vid.fadeT); Vid.fadeT = null; resolve(); }
     }, 60);
   });
 }
@@ -1340,56 +1368,150 @@ function vidTimes() {
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 const vox = new Audio();
 vox.preload = 'auto';
-let actx = null;
-const Voice = { naturalBroken: null, warned: false, cancel: null };
+let actx = null, voiceBus = null;
+const Voice = { naturalBroken: null, expressiveBroken: null, warned: false, cancel: null, onEl: false };
 const voiceMode = () => S.settings.voiceMode || 'natural';
-const useNatural = () => voiceMode() === 'natural' && !Voice.naturalBroken;
+const googleMode = () => voiceMode() === 'natural' || voiceMode() === 'expressive';
+const useGoogle = () => googleMode() && !Voice.naturalBroken;
 const gvoiceOf = h => (h && h.gvoice) || 'Charon';
 
+/* Delivery tags. Hosts can write [laughing], [short pause] and so on into a line.
+   Each voice engine gets only the tags it understands, and the screen never shows them. */
+const TAG_LIST = ['laughing', 'sigh', 'uhm', 'short pause', 'medium pause', 'long pause', 'whispering', 'sarcasm', 'shouting'];
+const TAG_ALIAS = {
+  laugh: 'laughing', laughs: 'laughing', laughter: 'laughing', chuckle: 'laughing', chuckles: 'laughing', chuckling: 'laughing',
+  sighs: 'sigh', sighing: 'sigh', um: 'uhm', umm: 'uhm', uh: 'uhm', pause: 'short pause', beat: 'short pause',
+  'pause short': 'short pause', 'pause long': 'long pause', whisper: 'whispering', whispers: 'whispering',
+  shout: 'shouting', shouts: 'shouting', sarcastic: 'sarcasm', sarcastically: 'sarcasm'
+};
+const normTagName = s => { const t = String(s).toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim(); return TAG_LIST.includes(t) ? t : (TAG_ALIAS[t] || ''); };
+const tidy = s => String(s || '').replace(/\s+([,.!?])/g, '$1').replace(/\s+/g, ' ').trim();
+const stripTags = s => tidy(String(s || '').replace(/\[[^\]]*\]/g, ' '));
+// known tags in one spelling, anything else in brackets dropped, at most three per line
+function keepTags(s) {
+  let n = 0;
+  return tidy(String(s || '').replace(/\[([^\]]*)\]/g, (m, x) => { const t = normTagName(x); return t && n++ < 3 ? ` [${t}] ` : ' '; }));
+}
+// the regular natural voices (Chirp 3 HD) only take pauses, written their own way, in a "markup" field
+function chirpInput(s) {
+  const map = { 'short pause': '[pause short]', 'medium pause': '[pause]', 'long pause': '[pause long]' };
+  let has = false;
+  const out = tidy(String(s || '').replace(/\[([^\]]*)\]/g, (m, x) => { const t = map[normTagName(x)]; if (t) { has = true; return ` ${t} `; } return ' '; }));
+  return has ? { markup: out } : { text: out };
+}
+
 function unlockAudio() {
-  try { vox.src = SILENT_WAV; const p = vox.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  try { if (vox.paused) { vox.src = SILENT_WAV; const p = vox.play(); if (p && p.catch) p.catch(() => {}); } } catch (e) {}
   try {
-    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
-    if (actx && actx.state === 'suspended') actx.resume();
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        actx = new AC();
+        // if the phone suspends the sound engine while the station is on, ask for it back
+        actx.addEventListener('statechange', () => {
+          if ((actx.state === 'suspended' || actx.state === 'interrupted') && Eng.on && !Eng.paused) { try { actx.resume(); } catch (e) {} }
+        });
+      }
+    }
+    if (actx && actx.state !== 'running' && actx.state !== 'closed') actx.resume();
   } catch (e) {}
   try { if ('speechSynthesis' in window && voiceMode() === 'phone') { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
 }
 
-function ttsErr(status, data) {
+function ttsErr(status, data, label = 'Natural voices') {
   const msg = (data && data.error && data.error.message) || '';
   const reason = JSON.stringify((data && data.error && data.error.details) || '');
-  if (/billing/i.test(msg + reason)) return 'Google needs billing turned on for natural voices, even on the free tier. Add it in Google Cloud under Billing.';
-  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(msg + reason)) return 'The Cloud Text-to-Speech API is not turned on in your Google project. Turn it on under APIs and Services, Library.';
+  if (/billing/i.test(msg + reason)) return `Google needs billing turned on for ${label.toLowerCase()}. Add it in Google Cloud under Billing.`;
+  if (/texttospeech/i.test(msg + reason) && /has not been used|is disabled|SERVICE_DISABLED/i.test(msg + reason)) return 'The Cloud Text-to-Speech API is not turned on in your Google project. Turn it on under APIs and Services, Library.';
   if (/API_KEY_SERVICE_BLOCKED|are blocked/i.test(msg + reason)) return 'Your Google key is limited to other APIs. Edit the key and add Cloud Text-to-Speech API to its API restrictions.';
   if (/referer|referrer/i.test(msg + reason)) return "Your Google key is locked to a different website. Add this page's address to the key's website restrictions.";
   if (/API key not valid/i.test(msg)) return 'Google rejected the voice key. Copy it again and paste it in Settings.';
-  if (status === 400 && /voice/i.test(msg)) return "That natural voice isn't available. Pick another one in the host's settings.";
+  if (label === 'Natural voices' && status === 400 && /voice/i.test(msg)) return "That natural voice isn't available. Pick another one in the host's settings.";
   if (status === 429) return 'Google says too many voice requests right now.';
-  return 'Natural voices failed' + (msg ? ': ' + msg : '.');
+  return `${label} failed` + (msg ? ': ' + msg : '.');
 }
+
 const ttsCache = new Map();
-async function synth(text, h) {
-  const key = (S.settings.ttsKey || S.settings.ytKey || '').trim();
+const googleKey = () => (S.settings.ttsKey || S.settings.ytKey || '').trim();
+async function ttsPost(body) {
+  const key = googleKey();
   if (!key) throw new UserError('Add a Google key for natural voices.', { fatal: true });
-  const name = `en-US-Chirp3-HD-${gvoiceOf(h)}`, rate = Math.min(1.3, Math.max(0.8, Number(h && h.grate) || 1));
-  const ck = name + '|' + rate + '|' + text;
-  if (ttsCache.has(ck)) return ttsCache.get(ck);
   let res;
   try {
     res = await fetch('https://texttospeech.googleapis.com/v1/text:synthesize?key=' + encodeURIComponent(key), {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ input: { text }, voice: { languageCode: 'en-US', name }, audioConfig: { audioEncoding: 'MP3', speakingRate: rate } })
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
     });
   } catch (e) { throw new UserError("Couldn't reach Google for the voices."); }
   const data = await res.json().catch(() => null);
+  return { res, data };
+}
+// a ready-to-play clip: a file for the plain audio player, and decoded sound for the sound engine
+async function makeClip(b64) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const clip = { url: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })), buffer: null, secs: 0 };
+  if (actx) { try { clip.buffer = await actx.decodeAudioData(bytes.buffer.slice(0)); clip.secs = clip.buffer.duration; } catch (e) {} }
+  return clip;
+}
+function cacheClip(ck, clip) {
+  ttsCache.set(ck, clip);
+  if (ttsCache.size > 80) { const [k0, c0] = ttsCache.entries().next().value; ttsCache.delete(k0); setTimeout(() => URL.revokeObjectURL(c0.url), 60000); }
+  return clip;
+}
+
+// Expressive voices: Google's Gemini voices, same 30 names, steered by a short style direction
+function gemPrompt(h, mood) {
+  const d = String((h && h.delivery) || '').trim() || firstSentence(h && h.personality) || 'Friendly and natural.';
+  const rate = Number(h && h.grate) || 1;
+  const pace = rate >= 1.04 ? ' Talk a little quicker than usual.' : rate <= 0.96 ? ' Take your time, a little slower than usual.' : '';
+  return [
+    `You are ${h ? h.name : 'a host'}, a host on a live radio station, talking on air between songs.`,
+    'Say the line the way a real radio host would: loose, conversational and expressive, with real reactions. Never like an audiobook or an announcer reading a script.',
+    `How you sound: ${d}${pace}`,
+    mood ? `The show right now: ${mood}` : ''
+  ].filter(Boolean).join(' ');
+}
+async function synthGemini(text, h, mood) {
+  const prompt = gemPrompt(h, mood), t = keepTags(text);
+  if (!stripTags(t)) throw new UserError('Nothing to say.');
+  const ck = `g|${gvoiceOf(h)}|${prompt}|${t}`;
+  if (ttsCache.has(ck)) return ttsCache.get(ck);
+  const { res, data } = await ttsPost({ input: { prompt, text: t }, voice: { languageCode: 'en-US', name: gvoiceOf(h), modelName: GEM_MODEL }, audioConfig: { audioEncoding: 'MP3' } });
+  if (!res.ok) throw new UserError(ttsErr(res.status, data, 'Expressive voices'), { fatal: [400, 403, 404].includes(res.status) });
+  if (!data || !data.audioContent) throw new UserError('Expressive voices sent back nothing.');
+  const clip = await makeClip(data.audioContent);
+  const secs = clip.secs || words(stripTags(t)) / 2.6;
+  addSpend(secs * GEM_PRICE.audioTokPerSec * GEM_PRICE.audioPerM / 1e6 + (prompt.length + t.length) / 4 * GEM_PRICE.textPerM / 1e6, 'voice');
+  return cacheClip(ck, clip);
+}
+async function synthChirp(text, h) {
+  const name = `en-US-Chirp3-HD-${gvoiceOf(h)}`, rate = Math.min(1.3, Math.max(0.8, Number(h && h.grate) || 1));
+  let input = chirpInput(text);
+  const ck = `c|${name}|${rate}|${input.markup || input.text}`;
+  if (ttsCache.has(ck)) return ttsCache.get(ck);
+  const ask = inp => ttsPost({ input: inp, voice: { languageCode: 'en-US', name }, audioConfig: { audioEncoding: 'MP3', speakingRate: rate } });
+  let { res, data } = await ask(input);
+  if (!res.ok && res.status === 400 && input.markup) ({ res, data } = await ask({ text: stripTags(text) }));   // pauses not accepted: say it plain
   if (!res.ok) throw new UserError(ttsErr(res.status, data), { fatal: res.status === 400 || res.status === 403 });
   if (!data || !data.audioContent) throw new UserError('Natural voices sent back nothing.');
-  const bin = atob(data.audioContent), bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
-  ttsCache.set(ck, url);
-  if (ttsCache.size > 80) { const [k0, u0] = ttsCache.entries().next().value; ttsCache.delete(k0); setTimeout(() => URL.revokeObjectURL(u0), 60000); }
-  return url;
+  return cacheClip(ck, await makeClip(data.audioContent));
+}
+// opts.engine forces one engine (for Test keys); otherwise expressive falls back to natural
+async function synth(text, h, opts = {}) {
+  const engine = opts.engine || (voiceMode() === 'expressive' && !Voice.expressiveBroken ? 'gemini' : 'chirp');
+  if (engine === 'gemini') {
+    try { return await synthGemini(text, h, opts.mood); }
+    catch (e) {
+      if (opts.engine) throw e;
+      if (e.fatal) expressiveFailed(e);
+    }
+  }
+  return synthChirp(text, h);
+}
+function expressiveFailed(e) {
+  if (Voice.expressiveBroken) return;
+  Voice.expressiveBroken = e.message;
+  toast(`${e.message} Using the regular natural voices for now.`, 9000);
 }
 function naturalFailed(e) {
   if (e && e.fatal && !Voice.naturalBroken) {
@@ -1398,11 +1520,14 @@ function naturalFailed(e) {
   }
 }
 // Kick off audio for a line as soon as the words exist, so it's ready by air time.
-function prepAudio(line) {
-  if (line.audio || !useNatural()) return line;
-  line.audio = synth(line.say, hostById(line.host)).catch(e => { naturalFailed(e); return null; });
+function prepAudio(line, ctx) {
+  if (line.audio || !useGoogle()) return line;
+  const b = (ctx && ctx.block) || Eng.block;
+  const mood = b ? `${b.name}. ${firstSentence(aboutFor(b))}` : '';
+  line.audio = synth(line.speak || line.say, hostById(line.host), { mood }).catch(e => { naturalFailed(e); return null; });
   return line;
 }
+const aboutFor = b => String((b && b.about) || '').replace(/\bthe listener\b/gi, L());
 
 function englishVoices() {
   if (!('speechSynthesis' in window)) return [];
@@ -1453,32 +1578,130 @@ function speakPhone(text, h) {
     setTimeout(next, 40);
   });
 }
+// Host lines play through the sound engine when it's running. Unlike a plain audio player,
+// it can start a new clip while the screen is locked without asking the browser first.
+function playBuffer(buf) {
+  return new Promise(resolve => {
+    let done = false, src = null, t = null;
+    const finish = ok => { if (done) return; done = true; clearTimeout(t); if (src) src.onended = null; if (Voice.cancel === cancel) Voice.cancel = null; resolve(ok); };
+    const cancel = () => { try { if (src) src.stop(); } catch (e) {} finish(true); };
+    let startAt = 0;
+    try {
+      if (!voiceBus) { voiceBus = actx.createGain(); voiceBus.gain.value = 1; voiceBus.connect(actx.destination); }
+      src = actx.createBufferSource(); src.buffer = buf; src.connect(voiceBus);
+      src.onended = () => finish(true);
+      Voice.cancel = cancel;
+      startAt = actx.currentTime;
+      src.start();
+    } catch (e) { finish(false); return; }
+    // Safety net in case the end never gets reported. It goes by the sound engine's own clock,
+    // so if the phone pauses the engine mid-line, the line picks up where it left off instead of being skipped.
+    const t0 = Date.now();
+    const check = () => {
+      if (done) return;
+      if (actx.state === 'closed' || Date.now() - t0 > 10 * 60e3) return finish(false);
+      if (actx.state === 'running' && actx.currentTime >= startAt + buf.duration + 0.4) return finish(true);
+      t = setTimeout(check, 1000);
+    };
+    t = setTimeout(check, buf.duration * 1000 + 1500);
+  });
+}
 function playUrl(url) {
   return new Promise(resolve => {
     let done = false;
-    const finish = ok => { if (done) return; done = true; vox.onended = vox.onerror = null; clearTimeout(t); if (Voice.cancel === cancel) Voice.cancel = null; resolve(ok); };
+    const finish = ok => { if (done) return; done = true; Voice.onEl = false; vox.onended = vox.onerror = null; clearTimeout(t); if (Voice.cancel === cancel) Voice.cancel = null; resolve(ok); };
     const cancel = () => { try { vox.pause(); } catch (e) {} finish(true); };
-    Voice.cancel = cancel;
+    Voice.cancel = cancel; Voice.onEl = true;
     vox.onended = () => finish(true);
     vox.onerror = () => finish(false);
-    const t = setTimeout(() => finish(true), 60000);
+    const t = setTimeout(() => finish(true), 90000);
     vox.src = url;
     const p = vox.play();
     if (p && p.catch) p.catch(() => finish(false));
   });
 }
+async function playClip(clip) {
+  if (!clip) return false;
+  if (actx && !clip.buffer && !clip.tried) {
+    clip.tried = true;
+    try { const ab = await (await fetch(clip.url)).arrayBuffer(); clip.buffer = await actx.decodeAudioData(ab); clip.secs = clip.buffer.duration; } catch (e) {}
+  }
+  if (actx && clip.buffer) {
+    if (actx.state !== 'running' && actx.state !== 'closed') { try { await Promise.race([actx.resume(), sleep(600)]); } catch (e) {} }
+    if (actx.state === 'running') return playBuffer(clip.buffer);
+  }
+  return playUrl(clip.url);
+}
 async function voiceOut(line) {
   const h = hostById(line.host);
   const mode = voiceMode();
   if (mode === 'off') { await new Promise(r => { const t = setTimeout(r, readTime(line.say)); Voice.cancel = () => { clearTimeout(t); r(); }; }); Voice.cancel = null; return; }
-  if (mode === 'natural' && !Voice.naturalBroken) {
+  if (useGoogle()) {
     if (!line.audio) prepAudio(line);
-    const url = line.audio ? await Promise.race([line.audio, sleep(6000).then(() => null)]) : null;
-    if (url && await playUrl(url)) return;
+    const clip = line.audio ? await Promise.race([line.audio, sleep(8000).then(() => null)]) : null;
+    if (clip && await playClip(clip)) return;
   }
   await speakPhone(line.say, h);
 }
 function stopVoice() { try { speechSynthesis.cancel(); } catch (e) {} if (Voice.cancel) Voice.cancel(); try { vox.pause(); } catch (e) {} }
+
+/* ---------- staying alive with the screen off ----------
+   Phones freeze pages that aren't playing anything. YouTube's player keeps its own sound going,
+   but the station page went quiet between host lines and got frozen mid-break. So while the
+   station is on, the page plays its own track that you can't hear (a 25 Hz hum far below what
+   ears or phone speakers pick up, but real sound, so the browser counts it) and tells the phone
+   it's a media player. That also puts the station on the lock screen with play, pause and skip. */
+const Keep = { el: null, url: null, meta: '' };
+function hushURL() {
+  if (Keep.url) return Keep.url;
+  const rate = 8000, n = rate * 12, buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true); dv.setUint32(24, rate, true);
+  dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true); w(36, 'data'); dv.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) dv.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 25 * i / rate) * 100), true);   // 300 whole cycles, so it loops without a click
+  Keep.url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  return Keep.url;
+}
+function keepAlive(on) {
+  if (!Keep.el) { if (!on) return; Keep.el = new Audio(); Keep.el.loop = true; Keep.el.preload = 'auto'; }
+  const el = Keep.el;
+  try {
+    if (on) { if (!el.src) el.src = hushURL(); if (el.paused) { const p = el.play(); if (p && p.catch) p.catch(() => {}); } }
+    else if (!el.paused) el.pause();
+  } catch (e) {}
+}
+// back on screen: restart anything the phone paused while the station was meant to be playing
+function wakeAudio() {
+  if (!Eng.on || Eng.paused) return;
+  keepAlive(true);
+  try { if (actx && (actx.state === 'suspended' || actx.state === 'interrupted')) actx.resume(); } catch (e) {}
+  if (Voice.onEl && vox.paused && !vox.ended) { try { const p = vox.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+const MS = 'mediaSession' in navigator ? navigator.mediaSession : null;
+function mediaInit() {
+  if (!MS) return;
+  const set = (a, f) => { try { MS.setActionHandler(a, f); } catch (e) {} };
+  set('play', () => { if (!Eng.on) tuneIn(); else resumeAir(); });
+  set('pause', () => pauseAir());
+  set('stop', () => pauseAir());
+  set('nexttrack', () => skip());
+}
+function mediaState() {
+  if (!MS) return;
+  try { MS.playbackState = !Eng.on ? 'none' : Eng.paused ? 'paused' : 'playing'; } catch (e) {}
+  if (!Eng.on) { if (Keep.meta) { Keep.meta = ''; try { MS.metadata = null; } catch (e) {} } return; }
+  if (typeof MediaMetadata === 'undefined') return;
+  const t = Eng.cur, b = Eng.block, talking = Eng.speaking && !Eng.paused ? hostName(Eng.speaking) : '';
+  const title = t ? t.title : talking ? `${talking} on the mic` : (b ? b.name : STN());
+  const artist = t ? (talking ? `${t.artist} · ${talking} on the mic` : t.artist) : STN();
+  const album = b ? `${b.name} on ${STN()}` : STN();
+  const vid = t && t.videoIds && t.videoIds[t.vi || 0];
+  const key = [title, artist, album, vid].join('|');
+  if (key === Keep.meta) return;
+  Keep.meta = key;
+  try { MS.metadata = new MediaMetadata({ title, artist, album, artwork: vid ? [{ src: `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }] : [] }); } catch (e) {}
+}
 
 // A short chime between segments, made on the spot so there's nothing to download.
 function sting() {
@@ -1709,14 +1932,14 @@ async function buildBreak(kind, trackP, ctx, stream, prep) {
   try {
     if (kind === 'segue') {
       const t = await trackP;
-      if (Math.random() < 0.6) stream.push(finishLine(prepAudio({ host: pick(blockHosts(ctx.block)), say: stationId(ctx), canned: true }), t));
+      if (Math.random() < 0.6) stream.push(finishLine(prepAudio({ host: pick(blockHosts(ctx.block)), say: stationId(ctx), canned: true }, ctx), t));
       return;
     }
     if (kind === 'news' && !(ctx.briefing && ctx.briefing.script)) prep.kind = kind = 'intro';
     const firstT = ctx.trackKnown ? await trackP : null;
     const { cast, n } = castFor(kind, firstT, ctx);
     prep.cast = cast;
-    if (kind === 'news') stream.push(prepAudio({ host: cast[0], say: ctx.briefing.script, news: true }));
+    if (kind === 'news') stream.push(prepAudio({ host: cast[0], say: ctx.briefing.script, news: true }, ctx));
     let speaker = kind === 'news' ? cast[1] : cast[0];
     const said = [];
     for (let turn = 0; turn < n; turn++) {
@@ -1728,17 +1951,20 @@ async function buildBreak(kind, trackP, ctx, stream, prep) {
       catch (e) {
         if (e.fatal) throw e;
         const t = await trackP;
-        if (t) stream.push(finishLine(prepAudio(fallbackLine(t, said.length ? said[said.length - 1].host : cast[0])), t));
+        if (t) stream.push(finishLine(prepAudio(fallbackLine(t, said.length ? said[said.length - 1].host : cast[0]), ctx), t));
         return;
       }
       if (prep.dead) return;
-      const line = { host: r.host, say: r.say };
+      const line = { host: r.host, say: r.say, speak: r.speak || r.say };
       if (final) {
-        if (track && !mentionsTrack(line.say, track)) line.say = `${line.say} ${pick(['Here’s', 'This is'])} ${track.title}, ${track.artist}.`;
+        if (track && !mentionsTrack(line.say, track)) {
+          const tail = ` ${pick(['Here’s', 'This is'])} ${track.title}, ${track.artist}.`;
+          line.say += tail; line.speak += tail;
+        }
         finishLine(line, track);
       }
       said.push(line);
-      stream.push(prepAudio(line));
+      stream.push(prepAudio(line, ctx));
       // in a handoff, the outgoing host only gets the first line
       const pool = kind === 'handoff' && cast.length > 1 ? cast.slice(1) : cast;
       speaker = r.next && pool.includes(r.next) && r.next !== r.host ? r.next : nextSpeaker(pool, r.host, said);
@@ -2074,7 +2300,7 @@ function setVerdict(t, v) {
 }
 
 /* ---------- rendering ---------- */
-function setOnAir(on) { $('#onair').classList.toggle('live', !!on); }
+function setOnAir(on) { $('#onair').classList.toggle('live', !!on); keepAlive(!!on); mediaState(); }
 function setTuning(on) { $('#dial').classList.toggle('tuning', !!on); }
 const ytmLink = t => {
   const id = t.videoId || (t.videoIds && t.videoIds[t.vi || 0]);
@@ -2118,6 +2344,7 @@ function renderNowOn() {
 }
 
 function renderLive() {
+  mediaState();
   const on = Eng.on;
   $('#livePanel').hidden = !on;
   if (!on) { renderMini(); return; }
@@ -2208,7 +2435,8 @@ function renderSched() {
     return `<li class="${on ? 'on' : ''}"><span class="s-time">${esc(fmtHour(b.start))}</span><span><span class="s-name">${esc(b.name)}</span><br><span class="s-hosts">${esc(listJoin(blockHosts(b).map(hostName)))}</span></span><span class="tag${on ? ' new' : ''}">${on ? 'On now' : esc((TALK_LEVELS.find(x => x[0] === b.talk) || ['', ''])[1])}</span></li>`;
   }).join('');
   const spent = S.spend[today()] || 0;
-  $('#spendLine').textContent = `Today's Claude cost: ${fmtCost(spent)}`;
+  const vs = (S.vspend && S.vspend[today()]) || 0;
+  $('#spendLine').textContent = `Today's cost: ${fmtCost(spent)}${vs ? `, including ${fmtCost(vs)} for expressive voices` : ''}`;
 }
 function renderAir() {
   const st = S.settings;
@@ -2273,7 +2501,8 @@ const KEY_FIELDS = ['claudeKey', 'ytKey', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
   const m = voiceMode();
-  document.body.classList.toggle('vm-natural', m === 'natural');
+  document.body.classList.toggle('vm-natural', m === 'natural' || m === 'expressive');
+  document.body.classList.toggle('vm-expressive', m === 'expressive');
   document.body.classList.toggle('vm-phone', m === 'phone');
 }
 function fillSettings() {
@@ -2296,7 +2525,7 @@ function onSettingInput(e) {
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (KEY_FIELDS.includes(f)) v = String(v).trim();
   S.settings[f] = v;
-  if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') Voice.naturalBroken = null;
+  if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') { Voice.naturalBroken = null; Voice.expressiveBroken = null; }
   if (f === 'voiceMode') applyVoiceClass();
   saveSoon(); renderHeader();
   if (KEY_FIELDS.includes(f) || f === 'briefingOn' || f === 'listener') renderAir();
@@ -2330,6 +2559,7 @@ function renderHostsEditor() {
         </div>
         <label class="f" for="${p}personality">Personality and music lane<textarea id="${p}personality" data-hf="personality">${esc(h.personality)}</textarea></label>
         <label class="f only-natural" for="${p}gvoice">Voice<select id="${p}gvoice" data-hf="gvoice">${gOpts}</select></label>
+        <label class="f only-expressive" for="${p}delivery">How they sound<textarea id="${p}delivery" data-hf="delivery" placeholder="Like: hype DJ energy, loud and quick, laughs a lot">${esc(h.delivery || '')}</textarea><small>A style direction for the expressive voices.</small></label>
         <label class="f only-natural" for="${p}grate">Speed <span class="muted" data-out="grate">${fmtX(h.grate)}</span><input type="range" id="${p}grate" data-hf="grate" min="0.85" max="1.2" step="0.01" value="${Number(h.grate) || 1}"></label>
         <label class="f only-phone" for="${p}voiceName">Phone voice<select id="${p}voiceName" data-hf="voiceName">${phoneOpts}</select></label>
         <div class="two only-phone">
@@ -2364,13 +2594,18 @@ function onHostInput(e) {
   if (f === 'name' || f === 'enabled') { renderShowsEditor(); renderAir(); }
 }
 async function previewHost(h) {
-  const text = `What's good ${L()}, it's ${h.name}, live on ${STN()}.`;
-  if (voiceMode() === 'natural') {
-    try { unlockAudio(); const url = await synth(text, h); await playUrl(url); return; }
+  const text = `Ayy, what's good ${L()}? [short pause] It's ${h.name}, live on ${STN()}.`;
+  if (googleMode()) {
+    try {
+      unlockAudio(); stopVoice();
+      const b = Eng.block || blockAt(new Date());
+      const clip = await synth(text, h, { mood: b ? `${b.name}. ${firstSentence(aboutFor(b))}` : '' });
+      await playClip(clip); return;
+    }
     catch (e) { toast(e.message || "Couldn't play the natural voice."); return; }
   }
   if (!('speechSynthesis' in window)) { toast("This browser can't read text out loud."); return; }
-  speakPhone(text, h);
+  speakPhone(stripTags(text), h);
 }
 
 function showMeta(b) { return `${fmtHour(b.start)} · ${blockHosts(b).length} host${blockHosts(b).length === 1 ? '' : 's'}`; }
@@ -2439,8 +2674,14 @@ async function testKeys() {
     if (!r.ok) throw new UserError(ytErr(r.status, d).msg);
     res.push(line(true, 'YouTube key'));
   } catch (e) { res.push(line(false, e.message || "Couldn't reach YouTube.")); }
-  if (voiceMode() === 'natural') {
-    try { await synth('Test.', anchorHost()); Voice.naturalBroken = null; res.push(line(true, 'Natural voices')); }
+  if (googleMode()) {
+    unlockAudio();
+    for (const k of [...ttsCache.keys()]) if (k.endsWith('|Test.')) ttsCache.delete(k);   // really ask Google, don't reuse an old test
+    if (voiceMode() === 'expressive') {
+      try { await synth('Test.', anchorHost(), { engine: 'gemini' }); Voice.expressiveBroken = null; res.push(line(true, 'Expressive voices')); }
+      catch (e) { res.push(line(false, `${e.message}${/^Expressive/.test(e.message) ? '' : ' (expressive voices)'} Until that's fixed, the station uses the regular natural voices.`)); }
+    }
+    try { await synth('Test.', anchorHost(), { engine: 'chirp' }); Voice.naturalBroken = null; res.push(line(true, 'Natural voices')); }
     catch (e) { res.push(line(false, `Natural voices: ${e.message}`)); }
   }
   out.innerHTML = res.join('');
@@ -2565,9 +2806,9 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.1', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.2', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
-    voices: voiceMode(), speedSettingsRefused: Tune.refused,
+    voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
     onAir: !!Eng.on, upcoming: Eng.upcoming.length, ytLookupsOut: YTQ.quotaDay === today(),
     problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded'
   }, null, 1);
@@ -2707,7 +2948,7 @@ $('#addHost').addEventListener('click', () => {
   const color = HOST_COLORS.find(c => !used.has(c)) || HOST_COLORS[hosts().length % HOST_COLORS.length];
   const usedV = new Set(hosts().map(h => h.gvoice));
   const gv = (GVOICES.find(v => !usedV.has(v[0])) || GVOICES[0])[0];
-  const h = { id: 'h' + Date.now().toString(36), name: 'New host', color, model: HAIKU, enabled: true, gvoice: gv, grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [],
+  const h = { id: 'h' + Date.now().toString(36), name: 'New host', color, model: HAIKU, enabled: true, gvoice: gv, grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [], delivery: '',
     personality: 'Describe who this host is, how they talk, and their music lane. Then add them to a show above.' };
   hosts().push(h); save(); renderHostsEditor();
   const card = $(`#hostsEd [data-hid="${h.id}"]`); if (card) { card.open = true; card.scrollIntoView({ block: 'center' }); }
@@ -2760,7 +3001,8 @@ if ('speechSynthesis' in window) {
   if (speechSynthesis.addEventListener) speechSynthesis.addEventListener('voiceschanged', onVoices);
   else speechSynthesis.onvoiceschanged = onVoices;
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Eng.on && !Eng.paused) keepAwake(true); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Eng.on && !Eng.paused) { keepAwake(true); wakeAudio(); } });
+mediaInit();
 window.addEventListener('pagehide', () => { persistQueue(); save(); });
 window.addEventListener('hashchange', () => { const c = syncCodeFrom(location.hash); if (c) showSyncIn(c); });
 
@@ -2773,7 +3015,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { extractJSON, salvageSongs, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
+window.__lunefm = { extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
 })();
 
 </script>
