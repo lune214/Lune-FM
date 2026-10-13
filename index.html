@@ -112,6 +112,8 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 .verdicts{display:flex;flex-wrap:wrap;gap:8px}
 .chip{appearance:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 13px;font-size:.88rem;font-weight:600;cursor:pointer;min-height:40px;color:var(--fg)}
 .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.chip.ghosty{border-style:dashed;color:var(--muted)}
+.chip:disabled{opacity:.5;cursor:default}
 
 /* Studio: hosts on the mic */
 .studio{display:flex;flex-wrap:wrap;gap:6px}
@@ -317,6 +319,7 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <button class="chip" data-verdict="love">Love it</button>
         <button class="chip" data-verdict="more">More like this</button>
         <button class="chip" data-verdict="skip">Not for me</button>
+        <button class="chip ghosty" id="censorBtn" title="This is the clean version">Censored</button>
       </div>
     </div>
 
@@ -486,6 +489,8 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f" for="s-tasteNotes">What you like about music
           <textarea id="s-tasteNotes"></textarea>
         </label>
+        <label class="switch" for="s-preferExplicit">Prefer explicit versions<input type="checkbox" id="s-preferExplicit"></label>
+        <p class="note">YouTube doesn't label clean and explicit versions, so the station goes by how uploads are named and steers away from ones marked clean, edited or radio edit. If a censored one still gets through, tap Censored under the song and it switches versions and remembers.</p>
       </fieldset>
 
       <fieldset>
@@ -640,6 +645,7 @@ const DEFAULT_SETTINGS = {
   tasteNotes: 'R&B at the core with a deep hip-hop foundation. Loves the most melodic, atmospheric cuts in any catalog, and songs where two voices share the same intimate register. Strong Nigerian and diaspora thread. Into jazz and vinyl culture. Likes finding artists before they blow up.',
   briefFocus: "Don't center the news on Kendrick Lamar, 6LACK, dvsn or Isaiah Rashad. Cover similar artists and the whole hip-hop world: new music, tours and shows, movies and TV, fashion and culture.",
   briefingOn: true,
+  preferExplicit: true,
   topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
   houseRules: 'Keep it fun and loose. Light cursing is fine. Tease each other all you want, but be good to the listener: never compare them to anyone, never rush them, always use their name. No jokes about real people’s looks or identities.',
   voiceMode: 'natural',
@@ -1222,10 +1228,24 @@ function ytErr(status, data) {
 }
 
 const BAD_WORDS = ['live', 'cover', 'sped up', 'slowed', 'reverb', 'reaction', 'karaoke', 'instrumental', '8d', 'nightcore', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'chopped', 'review', 'piano'];
+const preferExplicit = () => S.settings.preferExplicit !== false;
+/* Clean or explicit? YouTube doesn't say in anything an app can read, so this looks for how
+   uploads usually get labeled: "(Clean)", "Radio Edit", "(Explicit)" in titles, and in the
+   album line of YouTube Music's auto-made uploads, where clean albums are often "(Clean)" or "(Edited)". */
+const CLEAN_RE = /[([]\s*(clean|edited|censored)(\s+(version|audio|edit))?\s*[)\]]|\b(clean|edited|censored) version\b|\bclean (audio|edit)\b|\bradio (edit|version)\b|\btv (version|track)\b|\bkidz bop\b|\bcensored\b/i;
+const EXPLICIT_RE = /[([]\s*(explicit|dirty|uncensored)(\s+(version|audio))?\s*[)\]]|\b(explicit|dirty|uncensored) (version|audio)\b|\buncensored\b|\bexplicit\b/i;
+function versionHint(text, songTitle) {
+  const x = String(text || ''), s = norm(songTitle);
+  const word = m => norm(m).split(' ').find(w => /clean|edited|censored|radio|tv|kidz|explicit|dirty|uncensored/.test(w)) || '';
+  const mc = x.match(CLEAN_RE), me = x.match(EXPLICIT_RE);
+  // a song actually called "Clean" or "Dirty" doesn't count
+  return { clean: !!mc && !s.includes(word(mc[0])), explicit: !!me && !s.includes(word(me[0])) };
+}
 function scoreVideo(v, artist, title) {
   const t = norm(v.title), c = norm(v.channel), a = norm(artist);
   const s = norm(String(title).replace(/\s*[\(\[](feat|ft|with)[^\)\]]*[\)\]]/i, ''));
   const aFirst = a.split(' ')[0] || a;
+  const pe = preferExplicit();
   let sc = 0;
   if (/ - topic$/i.test(v.channel)) sc += 6;
   if (/vevo/i.test(v.channel)) sc += 2;
@@ -1234,28 +1254,83 @@ function scoreVideo(v, artist, title) {
   else if (s) { const w = s.split(' ').filter(x => x.length > 2); if (w.length && w.filter(x => t.includes(x)).length / w.length >= 0.6) sc += 2; else sc -= 15; }
   if (t.includes(a)) sc += 1;
   if (/official audio/.test(t)) sc += 3;
-  else if (/official (music )?video/.test(t)) sc += 2;
+  else if (/official (music )?video/.test(t)) sc += pe ? 1 : 2;   // music videos get bleeped more often than audio uploads
   else if (/visuali[sz]er/.test(t)) sc += 1;
   for (const b of BAD_WORDS) if (new RegExp('\\b' + b + '\\b').test(t) && !s.includes(b)) sc -= 5;
   if (/\blyrics?\b/.test(t)) sc -= 1;
+  if (pe) {
+    const ht = versionHint(v.title, title), hd = versionHint(v.desc, title);
+    if (ht.clean || hd.clean) sc -= 12;
+    else if (ht.explicit || hd.explicit) sc += 4;
+    if (S.censored && S.censored[v.id]) sc -= 40;
+  }
   return sc;
 }
+const isCensored = id => !!(S.censored && S.censored[id]);
 
 const YTQ = { quotaDay: null };
 const inflight = new Map();
 async function findVideos(artist, title) {
   const k = norm(artist) + '|' + norm(title);
-  if (S.ytCache[k] && S.ytCache[k].length) return S.ytCache[k];
-  if (YTQ.quotaDay === today()) return [];
   if (inflight.has(k)) return inflight.get(k);
-  const p = searchVideos(artist, title, k);
+  const p = (async () => {
+    let ids = (S.ytCache[k] || []).filter(id => !isCensored(id));
+    if (ids.length && preferExplicit() && !(S.ytChecked && S.ytChecked[k]) && YTQ.quotaDay !== today()) ids = await recheckVideos(artist, title, k, ids);
+    if (ids.length) return ids;
+    if (YTQ.quotaDay === today()) return [];
+    return searchVideos(artist, title, k);
+  })();
   inflight.set(k, p);
   try { return await p; } finally { inflight.delete(k); }
 }
-async function searchVideos(artist, title, k) {
+// Full descriptions for a few videos. Costs 1 unit of the daily YouTube allowance, where a search costs 100.
+async function videoDetails(ids) {
+  const key = (S.settings.ytKey || '').trim();
+  if (!key || !ids.length) return {};
+  try {
+    const res = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({ part: 'snippet', id: ids.slice(0, 50).join(','), key }));
+    if (!res.ok) return {};
+    const data = await res.json();
+    const out = {};
+    (data.items || []).forEach(it => { if (it && it.id && it.snippet) out[it.id] = { id: it.id, title: it.snippet.title || '', channel: it.snippet.channelTitle || '', desc: it.snippet.description || '' }; });
+    return out;
+  } catch (e) { return {}; }
+}
+function rankVideos(list, artist, title) {
+  return list.map(v => ({ ...v, score: scoreVideo(v, artist, title) })).filter(v => v.score > 0).sort((x, y) => y.score - x.score);
+}
+const looksClean = (v, title) => versionHint(v.title, title).clean || versionHint(v.desc, title).clean;
+// uploads labeled clean only stay on the list when there's nothing else
+const dropClean = (ranked, title) => { if (!preferExplicit()) return ranked; const ok = ranked.filter(v => !looksClean(v, title)); return ok.length ? ok : ranked; };
+function storeVideos(k, ids) {
+  if (!ids.length) return;
+  S.ytCache[k] = ids;
+  S.ytChecked = S.ytChecked || {};
+  if (preferExplicit()) S.ytChecked[k] = 1;
+  const keys = Object.keys(S.ytCache);
+  if (keys.length > 800) keys.slice(0, 200).forEach(x => { delete S.ytCache[x]; delete S.ytChecked[x]; });
+  saveSoon();
+}
+// a song the station found before this update: read the saved uploads' descriptions and re-rank them
+async function recheckVideos(artist, title, k, ids) {
+  const det = await videoDetails(ids);
+  if (!Object.keys(det).length) return ids;                       // couldn't check right now, try another time
+  const ranked = rankVideos(ids.map(id => det[id]).filter(Boolean), artist, title);
+  const best = ranked[0];
+  if (best && !looksClean(best, title)) {
+    const out = dropClean(ranked, title).map(v => v.id);
+    storeVideos(k, out);
+    return out;
+  }
+  // every saved upload looks clean: one fresh search for the explicit one
+  if (YTQ.quotaDay === today()) return ranked.length ? ranked.map(v => v.id) : ids;
+  const fresh = await searchVideos(artist, title, k, 'explicit', ranked);
+  return fresh.length ? fresh : ids;
+}
+async function searchVideos(artist, title, k, extra = '', also = []) {
   const key = (S.settings.ytKey || '').trim();
   if (!key) throw new UserError('Add your YouTube API key in Settings first.', { fatal: true });
-  const qs = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}`, key });
+  const qs = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}${extra ? ' ' + extra : ''}`, key });
   let res;
   try { res = await fetch('https://www.googleapis.com/youtube/v3/search?' + qs); }
   catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection."); }
@@ -1265,18 +1340,17 @@ async function searchVideos(artist, title, k) {
     if (e.quota) { if (YTQ.quotaDay !== today()) toast("Today's YouTube lookups ran out, so the station will stick to songs it already found until they reset.", 7000); YTQ.quotaDay = today(); return []; }
     throw new UserError(e.msg, { fatal: true });
   }
-  const vids = (data.items || []).filter(it => it.id && it.id.videoId)
-    .map(it => ({ id: it.id.videoId, title: decode(it.snippet.title), channel: decode(it.snippet.channelTitle || '') }))
-    .map(v => ({ ...v, score: scoreVideo(v, artist, title) }))
-    .filter(v => v.score > 0)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, 5).map(v => v.id);
-  if (vids.length) {
-    S.ytCache[k] = vids;
-    const keys = Object.keys(S.ytCache);
-    if (keys.length > 800) keys.slice(0, 200).forEach(x => delete S.ytCache[x]);
-    saveSoon();
+  const found = (data.items || []).filter(it => it.id && it.id.videoId)
+    .map(it => ({ id: it.id.videoId, title: decode(it.snippet.title), channel: decode(it.snippet.channelTitle || ''), desc: decode(it.snippet.description || '') }));
+  const seen = new Set(found.map(v => v.id));
+  let ranked = rankVideos([...found, ...also.filter(v => !seen.has(v.id))], artist, title);
+  if (preferExplicit() && ranked.length) {
+    // the search only shows the start of each description, so read the top few in full
+    const det = await videoDetails(ranked.slice(0, 6).map(v => v.id));
+    if (Object.keys(det).length) ranked = rankVideos(ranked.map(v => det[v.id] ? { ...v, desc: det[v.id].desc } : v), artist, title);
   }
+  const vids = dropClean(ranked.filter(v => !isCensored(v.id)), title).slice(0, 5).map(v => v.id);
+  storeVideos(k, vids);
   return vids;
 }
 async function resolveTrack(t) {
@@ -1342,7 +1416,7 @@ function fadeTo(target, ms) {
     }, 60);
   });
 }
-function playVideo(id, startVol) {
+function playVideo(id, startVol, startSeconds = 0) {
   if (Vid.pending) Vid.pending.finish('aborted');
   let resolveDone, resolveStarted;
   const done = new Promise(r => resolveDone = r);
@@ -1355,7 +1429,7 @@ function playVideo(id, startVol) {
   Vid.pending = p;
   clearInterval(Vid.fadeT);
   setVol(startVol);
-  player.loadVideoById({ videoId: id });
+  player.loadVideoById(startSeconds > 1 ? { videoId: id, startSeconds: Math.floor(startSeconds) } : { videoId: id });
   setVol(startVol);
   p.watch = setTimeout(() => { try { const s = player.getPlayerState(); if (Vid.pending === p && s !== 1 && s !== 3) $('#tapHint').hidden = false; } catch (e) {} }, 6000);
   return p;
@@ -2068,7 +2142,8 @@ async function playTrack(t, overLines, my) {
   let overDone = !overLines.length;
   for (let k = t.vi || 0; k < t.videoIds.length; k++) {
     t.vi = k;
-    const pv = playVideo(t.videoIds[k], overDone ? 100 : DUCK);
+    const at = t.swapAt || 0; t.swapAt = 0;
+    const pv = playVideo(t.videoIds[k], overDone ? 100 : DUCK, at);
     if (!overDone) {
       overDone = true;
       await Promise.race([pv.started, sleep(5000)]);
@@ -2082,7 +2157,7 @@ async function playTrack(t, overLines, my) {
     const r = await pv.done;
     stopTrackPoll();
     if (!live(my)) return;
-    if (r === 'error') continue;
+    if (r === 'error' || r === 'swap') continue;
     if (r === 'aborted') t.cut = true;
     t.status = 'played';
     break;
@@ -2234,6 +2309,41 @@ function skip() {
     fadeTo(0, 450).then(() => { if (Vid.pending === pv) { try { player.pauseVideo(); } catch (e) {} pv.finish('aborted'); } });
   }
 }
+/* "Censored": this upload is the clean version. Remember it, then switch to the next best
+   upload of the same song at the same spot, searching once more for the explicit one if needed. */
+async function reportCensored() {
+  const t = Eng.cur, pv = Vid.pending;
+  if (!Eng.on || !t || !pv || !t.videoIds || Eng.swapping) return;
+  const vi = t.vi || 0, bad = t.videoIds[vi];
+  S.censored = S.censored || {};
+  S.censored[bad] = Date.now();
+  const ck = Object.keys(S.censored);
+  if (ck.length > 500) ck.sort((x, y) => S.censored[x] - S.censored[y]).slice(0, ck.length - 500).forEach(x => delete S.censored[x]);
+  const k = trackKey(t);
+  if (S.ytCache[k]) S.ytCache[k] = S.ytCache[k].filter(id => id !== bad);
+  save();
+  let alts = t.videoIds.slice(vi + 1).filter(id => !isCensored(id));
+  Eng.swapping = true; renderLive();
+  try {
+    if (!alts.length) {
+      if (YTQ.quotaDay === today()) { toast("That upload won't play again. Today's YouTube lookups are used up, so there's nothing else to switch to. Skipping it."); skip(); return; }
+      toast('Got it. Looking for the explicit version.');
+      const det = await videoDetails(t.videoIds.filter(id => !isCensored(id)));
+      alts = (await searchVideos(t.artist, t.title, k, 'explicit', Object.values(det))).filter(id => !isCensored(id));
+      if (Eng.cur !== t || Vid.pending !== pv) return;   // the song ended or got skipped meanwhile
+    }
+    if (!alts.length) { toast("Couldn't find another version of this one, so it's skipping it. That upload won't play again."); skip(); return; }
+    const tm = vidTimes();
+    t.videoIds = [...t.videoIds.slice(0, vi + 1), ...alts];
+    t.swapAt = tm && tm.c > 3 && tm.left > 15 ? Math.max(0, tm.c - 1) : 0;
+    stopVoice(); Eng.cutTalk = true;
+    pv.fading = true;
+    await fadeTo(0, 350);
+    if (Vid.pending === pv) { try { player.pauseVideo(); } catch (e) {} pv.finish('swap'); }
+    toast('Switched to another version of this song.');
+  } catch (e) { toast(e.message || "Couldn't look for another version."); }
+  finally { Eng.swapping = false; renderLive(); }
+}
 function playNow(t) {
   if (!Eng.on) return;
   Eng.upcoming = [t, ...Eng.upcoming.filter(x => x !== t)];
@@ -2383,6 +2493,7 @@ function renderLive() {
     $('#tLink').href = ytmLink(shown);
   }
   $('#verdicts').hidden = !t;
+  $('#censorBtn').disabled = !!Eng.swapping;
   if (t) $$('#verdicts .chip').forEach(c => { const v = t.verdict === c.dataset.verdict; c.classList.toggle('on', v); c.setAttribute('aria-pressed', String(v)); });
   $('#playBtn').innerHTML = Eng.paused ? ICON.play + 'Resume' : ICON.pause + 'Pause';
   $('#skipBtn').disabled = !on;
@@ -2496,7 +2607,7 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'briefingOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const FIELDS = ['claudeKey', 'ytKey', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'preferExplicit', 'briefingOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
 const KEY_FIELDS = ['claudeKey', 'ytKey', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
@@ -2806,8 +2917,9 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.2', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.3', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
+    preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
     onAir: !!Eng.on, upcoming: Eng.upcoming.length, ytLookupsOut: YTQ.quotaDay === today(),
     problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded'
@@ -2880,6 +2992,7 @@ $('#playBtn').addEventListener('click', togglePlay);
 $('#miniPlay').addEventListener('click', togglePlay);
 $('#skipBtn').addEventListener('click', skip);
 $('#verdicts').addEventListener('click', e => {
+  if (e.target.closest('#censorBtn')) { reportCensored(); return; }
   const c = e.target.closest('[data-verdict]'); if (!c || !Eng.cur) return;
   setVerdict(Eng.cur, c.dataset.verdict);
 });
@@ -3015,7 +3128,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
+window.__lunefm = { versionHint, rankVideos, reportCensored, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
 })();
 
 </script>
