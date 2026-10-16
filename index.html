@@ -113,6 +113,8 @@ body.has-mini .wrap{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 170px)
 .chip{appearance:none;border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 13px;font-size:.88rem;font-weight:600;cursor:pointer;min-height:40px;color:var(--fg)}
 .chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 .chip.ghosty{border-style:dashed;color:var(--muted)}
+.wrongrow{align-items:center;padding:10px 12px;border:1px dashed var(--line);border-radius:14px}
+.wrongq{flex-basis:100%;font-size:.86rem;color:var(--muted)}
 .chip:disabled{opacity:.5;cursor:default}
 
 /* Studio: hosts on the mic */
@@ -319,7 +321,13 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <button class="chip" data-verdict="love">Love it</button>
         <button class="chip" data-verdict="more">More like this</button>
         <button class="chip" data-verdict="skip">Not for me</button>
-        <button class="chip ghosty" id="censorBtn" title="This is the clean version">Censored</button>
+        <button class="chip ghosty" id="wrongBtn" aria-controls="wrongRow">Wrong version</button>
+      </div>
+      <div class="verdicts wrongrow" id="wrongRow" hidden>
+        <span class="wrongq">What's wrong with it?</span>
+        <button class="chip" data-wrong="censored">Censored</button>
+        <button class="chip" data-wrong="altered">Slowed or remix</button>
+        <button class="chip" data-wrong="song">Wrong song</button>
       </div>
     </div>
 
@@ -346,7 +354,7 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
 
     <h2 class="section" id="schedHead">Today on Lune FM</h2>
     <ul class="sched" id="schedList"></ul>
-    <div class="showfoot"><span id="spendLine"></span></div>
+    <div class="showfoot"><span id="spendLine"></span><span id="ytLine"></span></div>
   </main>
 
   <!-- HISTORY -->
@@ -401,6 +409,10 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f" for="s-ytKey">YouTube API key
           <span class="keyrow"><input type="password" id="s-ytKey" placeholder="AIza..." spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ytKey">Show</button></span>
           <small>Free. About 100 new song lookups a day. The station remembers every song it already found, so repeats don't count.</small>
+        </label>
+        <label class="f" for="s-ytKey2">Backup YouTube key (optional)
+          <span class="keyrow"><input type="password" id="s-ytKey2" placeholder="AIza... from a second Google project" spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ytKey2">Show</button></span>
+          <small>Every Google project gets its own daily lookups. Make a second project in Google Cloud, turn on YouTube Data API v3 there, create an API key, and paste it here. When the first key runs out, the station switches to this one, so you get about 200 new songs a day.</small>
         </label>
         <label class="f only-natural" for="s-ttsKey">Google voice key (optional)
           <span class="keyrow"><input type="password" id="s-ttsKey" placeholder="Leave empty to use your YouTube key" spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ttsKey">Show</button></span>
@@ -490,12 +502,14 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
           <textarea id="s-tasteNotes"></textarea>
         </label>
         <label class="switch" for="s-preferExplicit">Prefer explicit versions<input type="checkbox" id="s-preferExplicit"></label>
-        <p class="note">YouTube doesn't label clean and explicit versions, so the station goes by how uploads are named and steers away from ones marked clean, edited or radio edit. If a censored one still gets through, tap Censored under the song and it switches versions and remembers.</p>
+        <p class="note">YouTube doesn't label clean and explicit versions, so the station goes by how uploads are named and steers away from ones marked clean, edited or radio edit. If a censored one still gets through, tap Wrong version under the song, then Censored. It switches versions and remembers.</p>
       </fieldset>
 
       <fieldset>
         <legend>Daily briefing</legend>
         <label class="switch" for="s-briefingOn">Read today's hip-hop news once a day<input type="checkbox" id="s-briefingOn"></label>
+        <label class="switch" for="s-releasesOn">Look up new releases once a day<input type="checkbox" id="s-releasesOn"></label>
+        <p class="note">The song picker only knows music up to a certain date. With this on, the station searches the web each day for new songs and albums from your artists and artists like them, and works them into the shows. About three web searches a day, a few cents.</p>
         <p class="note">It airs early in the first show you tune into each day, read by whoever has the news desk.</p>
         <label class="f" for="s-briefFocus">What the news should cover
           <textarea id="s-briefFocus"></textarea>
@@ -639,12 +653,13 @@ const DEFAULT_SCHEDULE = [
 ];
 const TALK_LEVELS = [['chatty', 'Lots of talk'], ['balanced', 'Some talk'], ['light', 'Mostly music']];
 const DEFAULT_SETTINGS = {
-  claudeKey: '', ytKey: '', ttsKey: '',
+  claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '',
   listener: 'Lune', station: 'Lune FM', freq: '88.7',
   artists: 'Brent Faiyaz, Lucky Daye, dvsn, GIVĒON, Ovi Wood, Odeal, Isaiah Falls, Olivia Dean, Mac Miller, Kendrick Lamar, 6LACK, Isaiah Rashad, Robert Glasper',
   tasteNotes: 'R&B at the core with a deep hip-hop foundation. Loves the most melodic, atmospheric cuts in any catalog, and songs where two voices share the same intimate register. Strong Nigerian and diaspora thread. Into jazz and vinyl culture. Likes finding artists before they blow up.',
   briefFocus: "Don't center the news on Kendrick Lamar, 6LACK, dvsn or Isaiah Rashad. Cover similar artists and the whole hip-hop world: new music, tours and shows, movies and TV, fashion and culture.",
   briefingOn: true,
+  releasesOn: true,
   preferExplicit: true,
   topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
   houseRules: 'Keep it fun and loose. Light cursing is fine. Tease each other all you want, but be good to the listener: never compare them to anyone, never rush them, always use their name. No jokes about real people’s looks or identities.',
@@ -939,17 +954,50 @@ function tasteContext() {
     played: S.played.slice(0, 120).map(fmtT)
   };
 }
-function knownSongs() {
-  // songs the station already found on YouTube, for days the lookups run out
-  const seen = new Set(), out = [];
-  const recent = new Set(S.played.slice(0, 25).map(p => p.k));
+// Songs the station already found on YouTube, for when the day's lookups run out.
+// Loved songs first, then whatever hasn't played in the longest time.
+function knownSongs(gap = 30) {
+  const seen = new Set(), rows = [];
+  const recent = new Set(S.played.slice(0, gap).map(p => p.k));
   const skip = new Set(S.feedback.filter(f => f.verdict === 'skip').map(f => f.k));
+  const lastAt = new Map(S.played.map(p => [p.k, p.at || 0]));
   [...S.feedback, ...S.played].forEach(p => {
     const k = trackKey(p);
     if (seen.has(k) || recent.has(k) || skip.has(k) || !(S.ytCache[k] && S.ytCache[k].length)) return;
-    seen.add(k); out.push(fmtT(p));
+    seen.add(k);
+    rows.push({ name: fmtT(p), loved: p.verdict === 'love' || p.verdict === 'more', at: lastAt.get(k) || 0 });
   });
-  return out.slice(0, 80);
+  rows.sort((x, y) => (y.loved - x.loved) || (x.at - y.at));
+  if (rows.length < 10 && gap > 4) return knownSongs(4);          // small library: allow repeats sooner rather than going silent
+  return rows.slice(0, 100).map(r => r.name);
+}
+
+/* ---------- variety ---------- */
+// who has played a lot lately, so the picker can give other artists a turn
+function artistLoad() {
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const recent = new Map(), today = new Map();
+  S.played.slice(0, 40).forEach((p, i) => {
+    const a = mainArtist(p.artist);
+    if (i < 30) recent.set(a, (recent.get(a) || 0) + 1);
+    if ((p.at || 0) >= dayStart.getTime()) today.set(a, (today.get(a) || 0) + 1);
+  });
+  const names = new Map(S.played.slice(0, 40).map(p => [mainArtist(p.artist), p.artist]));
+  const heavy = [...names.keys()].filter(a => (recent.get(a) || 0) >= 2 || (today.get(a) || 0) >= 3).map(a => names.get(a));
+  return { recent, today, heavy };
+}
+// a different handful of the listener's artists each time, so it isn't always the same five names
+function artistSample(n = 6) {
+  const list = String(S.settings.artists || '').split(',').map(x => x.trim()).filter(Boolean);
+  return shuffle(list).slice(0, n);
+}
+// the daily new-releases list, minus anything already played
+function freshReleases() {
+  const r = S.releases;
+  if (!S.settings.releasesOn || !r || !Array.isArray(r.items)) return [];
+  if ((Date.now() - new Date(r.date + 'T12:00:00').getTime()) > 3 * 86400e3) return [];
+  const played = new Set(S.played.slice(0, 200).map(p => p.k));
+  return r.items.filter(x => !played.has(trackKey(x))).slice(0, 14);
 }
 
 /* last resort when the JSON is broken: pull out each artist and title pair the reply did name */
@@ -971,14 +1019,17 @@ function songErr(r, e) {
 }
 
 async function planSet(block, n, opts = {}) {
+  if (opts.known && !opts.known.length) throw new UserError(`Today's YouTube lookups are used up and the station hasn't found enough songs yet to replay. They come back at ${ytResetText()}. A backup YouTube key in Settings doubles the daily lookups.`, { fatal: true });
   const st = S.settings, crew = blockHosts(block).map(hostById);
   const ctx = tasteContext(), now = new Date();
   const system = [
     `You are the program director of ${STN()}, a personal radio station made for one listener named ${L()}. You pick the songs for one show at a time, a few songs at a time, while the station is live. You never speak on air.`,
     '',
     'Rules:',
-    '- Only pick songs that really exist. Use the exact official song title and the main artist name as they appear on streaming services.',
+    '- Only pick songs that really exist. Use the exact official song title and the main artist name as they appear on streaming services. If you are not sure a song exists with that exact title, pick a different one you are sure of.',
     '- Never repeat a song from the recently played list.',
+    "- Variety matters. Spread the picks across many different artists, never two songs by the same artist in one set, and skip artists that have played a lot lately. Use the loved songs as a guide to the sound and the feel, not as a list of artists to replay.",
+    '- Your own knowledge of music stops at a cutoff date. When there is a list of new releases from today\'s web search, lean on it for anything recent.',
     '- Build a flow. Think about how each song hands off to the next: tempo, mood, era.',
     '- Give each song to the host on this show whose music lane fits it best, and spread the picks across them.',
     '- Use host names exactly as written.'
@@ -990,9 +1041,13 @@ async function planSet(block, n, opts = {}) {
     'Hosts on this show:',
     ...crew.map(h => `- ${h.name}: ${h.personality}`),
     '',
-    `Artists ${L()} loves: ${st.artists}`,
+    `Some artists ${L()} loves (a different handful each time, so everyone gets a turn): ${artistSample().join(', ')}`,
     `About ${L()}'s taste: ${st.tasteNotes}`
   ];
+  const load = artistLoad();
+  if (load.heavy.length && !opts.known) lines.push(`Played a lot lately, so leave these artists out this time: ${load.heavy.join(', ')}`);
+  const fresh = opts.known ? [] : freshReleases();
+  if (fresh.length) lines.push(`New releases from the last few weeks, found by today's web search, so they are real even if you don't know them: ${fresh.map(x => `${x.artist} - ${x.title}${x.project ? ` (${x.project})` : ''}`).join('; ')}. Work one of these in when it fits the show, tagged "new".`);
   if (ctx.loved.length) lines.push(`Songs ${L()} loved recently: ${ctx.loved.join('; ')}`);
   if (ctx.more.length) lines.push(`${L()} asked for more songs like: ${ctx.more.join('; ')}`);
   if (ctx.skipped.length) lines.push(`Not for ${L()}, so avoid these and anything close to them: ${ctx.skipped.join('; ')}`);
@@ -1013,23 +1068,33 @@ async function planSet(block, n, opts = {}) {
   catch (e) { d = salvageSongs(r.text); if (!d.songs.length) { noteFail('Song picker', r, e); throw songErr(r, e); } }
   const songs = Array.isArray(d.songs) ? d.songs : [];
   if (!songs.length) { noteFail('Song picker', r, 'no songs in the reply'); throw songErr(r); }
-  const recent = new Set(S.played.slice(0, 150).map(p => p.k));
+  // with the lookups used up, the pool is small, so only keep out the last few songs
+  const recent = new Set(S.played.slice(0, opts.known ? 4 : 150).map(p => p.k));
   const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
-  const taken = new Set((opts.exclude || []).map(trackKey));
+  // with the lookups used up, replays from earlier today are fine; only what's already lined up is off limits
+  const taken = new Set((opts.known ? (Eng.upcoming || []) : (opts.exclude || [])).map(trackKey));
+  // artist cooldown: nobody from the last 8 songs or already lined up, nobody twice in a set, three a day at most
+  const cool = new Set([...S.played.slice(0, 8), ...(Eng.upcoming || []), ...(opts.after || [])].map(x => mainArtist(x.artist)));
+  const setArtists = new Set();
   const pool = blockHosts(block).map(hostById);
-  const tracks = [];
+  const tracks = [], held = [];
   songs.forEach((s, i) => {
     if (!s || !s.artist || !s.title) return;
     const t = { artist: String(s.artist).trim(), title: String(s.title).trim(), tag: normTag(s.tag), why: cleanHost(s.why), status: 'queued', verdict: null, videoIds: null, vi: 0 };
     const k = trackKey(t);
     const isReq = !!opts.request && i === 0;
     if (!isReq && (taken.has(k) || fb.get(k) === 'skip' || recent.has(k))) return;
-    taken.add(k);
     t.pickedBy = nameToId(s.picked_by, pool) || pick(pool).id;
     const v = fb.get(k); if (v === 'love' || v === 'more') t.verdict = v;
     if (isReq) t.request = opts.request;
+    const ma = mainArtist(t.artist);
+    taken.add(k);
+    // over-played artists wait their turn, unless that would leave nothing to play
+    if (!isReq && !opts.known && (cool.has(ma) || setArtists.has(ma) || (load.today.get(ma) || 0) >= 3)) { held.push(t); return; }
+    setArtists.add(ma);
     tracks.push(t);
   });
+  if (!tracks.length && held.length) tracks.push(held[0]);
   return { tracks: tracks.slice(0, n + 1), topic: cleanHost(d.topic || ''), cost: r.cost };
 }
 
@@ -1042,17 +1107,22 @@ async function genBriefing() {
     `Who you are: ${h.personality}`,
     `Focus: ${st.briefFocus}`,
     'Rules:',
-    '- Use web search. Only report things you found in results from the last seven days. Do not present rumors as fact.',
+    '- Use web search. Report things from the last two days first. Only go back as far as a week if there is not enough, and never further. Do not present rumors as fact.',
+    '- Never repeat a story that was already on air in the last few days unless there is a real new development, and then say what is new.',
     '- A speech engine reads the script out loud. No emojis, markdown, lists or em dashes.',
     `- Use the name ${L()} at most once. Never compare ${L()} to other people.`,
     '- Sound like yourself, with your personality, but keep the facts straight. Talk like radio: short sentences, one story flowing into the next.'
   ].join('\n');
+  const past = recentNews();
   const user = [
-    "Find this week's news across hip-hop and R&B: new music, tours and shows, movies and TV, fashion and culture. Use at most 4 searches.",
+    "Find the newest news across hip-hop and R&B: new music, tours and shows, movies and TV, fashion and culture. Use at most 4 searches.",
+    ...(past.headlines.length ? ['', 'Already covered on air in the last few days, so skip these unless something new happened:', ...past.headlines.map(x => `- ${x}`), ''] : []),
+    past.lead ? `Last time led with ${past.lead}, so lead with a different kind of story today.` : '',
+    "If there isn't much new, keep it short and say it's a quiet day rather than repeating old stories.",
     'Then reply with only a JSON object, no other text, in this shape:',
     '{"script": "the spoken segment, 90 to 150 words. Open with a quick line into the news. Do not introduce the next song, someone else does that.", "items": [{"category": "music or shows or film and tv or fashion or culture", "headline": "under 12 words", "detail": "one sentence", "url": "the source link from your search results"}]}',
     'Include 3 to 6 items.'
-  ].join('\n');
+  ].filter(Boolean).join('\n');
   const r = await callClaude({ system, user, maxTokens: 8000, model: st.directorModel, effort: 'medium', tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 4 }] });
   let d;
   try { d = extractJSON(r.text); } catch (e) { noteFail('Daily briefing', r, e); throw e; }
@@ -1063,6 +1133,44 @@ async function genBriefing() {
     return { category: String(i.category || 'news').toLowerCase(), headline: cleanHost(i.headline), detail: cleanHost(i.detail), url };
   });
   return { date: localDate(now), script, items, host: h.id, aired: false, cost: r.cost };
+}
+// headlines from the last few briefings, so tomorrow's doesn't repeat today's
+function recentNews() {
+  const log = (S.newsLog || []).filter(x => x.date !== today()).slice(0, 4);
+  return { headlines: log.flatMap(x => x.headlines || []).slice(0, 24), lead: log[0] && log[0].lead };
+}
+function logNews(b) {
+  if (!b || !Array.isArray(b.items)) return;
+  S.newsLog = [{ date: b.date, headlines: b.items.map(i => i.headline).filter(Boolean), lead: (b.items[0] && b.items[0].category) || '' }, ...(S.newsLog || []).filter(x => x.date !== b.date)].slice(0, 6);
+}
+
+/* ---------- new releases ----------
+   The song picker only knows music up to its cutoff date, so once a day the station looks up
+   what came out lately from the listener's artists and artists like them. */
+async function genReleases() {
+  const st = S.settings, now = new Date();
+  const dateText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const lovedArtists = [...new Set(S.feedback.filter(f => f.verdict === 'love' || f.verdict === 'more').map(f => f.artist))].slice(0, 12);
+  const system = `You find new music for ${STN()}, a personal radio station made for one listener named ${L()}. Today is ${dateText}. Use web search and only list real releases you found in the search results.`;
+  const user = [
+    `Artists ${L()} loves: ${st.artists}`,
+    lovedArtists.length ? `Artists of songs ${L()} loved on the station: ${lovedArtists.join(', ')}` : '',
+    `About ${L()}'s taste: ${st.tasteNotes}`,
+    '',
+    'Find songs released in roughly the last two months by these artists and by artists in the same lanes. Include the newest album or EP from any of them that came out this year, with one to three standout songs from it. Use at most 3 searches.',
+    'Use the exact song title and the main artist name as they appear on streaming services.',
+    'Reply with only a JSON object, no other text, in this shape:',
+    '{"releases": [{"artist": "main artist", "title": "exact song title", "project": "album, EP or single name", "released": "month and day"}]}',
+    'List 8 to 20 songs.'
+  ].filter(Boolean).join('\n');
+  const r = await callClaude({ system, user, maxTokens: 6000, model: st.directorModel, effort: 'medium', tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }] });
+  let d;
+  try { d = extractJSON(r.text); } catch (e) { noteFail('New releases', r, e); throw e; }
+  const seen = new Set();
+  const items = (Array.isArray(d.releases) ? d.releases : []).filter(x => x && x.artist && x.title).map(x => ({
+    artist: cleanHost(x.artist), title: cleanHost(x.title), project: cleanHost(x.project || ''), released: cleanHost(x.released || '')
+  })).filter(x => { const k = trackKey(x); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 20);
+  return { date: localDate(now), items, cost: r.cost };
 }
 
 /* ---------- host agents ---------- */
@@ -1227,7 +1335,10 @@ function ytErr(status, data) {
   return { msg: 'YouTube search failed' + (msg ? ': ' + msg : '.') };
 }
 
-const BAD_WORDS = ['live', 'cover', 'sped up', 'slowed', 'reverb', 'reaction', 'karaoke', 'instrumental', '8d', 'nightcore', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'chopped', 'review', 'piano'];
+const BAD_WORDS = ['live', 'cover', 'reaction', 'karaoke', 'instrumental', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'review', 'piano', 'interview', 'highlights', 'trailer', 'podcast', 'behind the scenes'];
+// edits that change the song itself: these never win unless the song is actually called that
+const ALTERED = [/\bslow(ed)?\b/, /\breverb(ed)?\b/, /\bsp(e|ee)d\s*up\b/, /\bnightcore\b/, /\bdaycore\b/, /\b8d\b/, /\bbass\s*boost(ed)?\b/, /\bchopped\b/, /\bscrewed\b/, /\bpitched\b/, /\bunderwater\b/];
+const BAD_CATEGORY = { 17: 'sports', 25: 'news', 26: 'how-to', 27: 'education', 28: 'tech' };
 const preferExplicit = () => S.settings.preferExplicit !== false;
 /* Clean or explicit? YouTube doesn't say in anything an app can read, so this looks for how
    uploads usually get labeled: "(Clean)", "Radio Edit", "(Explicit)" in titles, and in the
@@ -1241,6 +1352,17 @@ function versionHint(text, songTitle) {
   // a song actually called "Clean" or "Dirty" doesn't count
   return { clean: !!mc && !s.includes(word(mc[0])), explicit: !!me && !s.includes(word(me[0])) };
 }
+/* Is this upload really by this artist? The name has to show up in the title, the channel or
+   the description (YouTube Music's auto-made uploads list the artists there). */
+const artistParts = artist => String(artist).split(/\s*(?:,|&|\band\b|\bx\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i).map(norm).filter(p => p.length >= 4);
+const mainArtist = artist => norm(String(artist).split(/\s*(?:,|&|\bx\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)[0]) || norm(artist);
+function hasArtist(v, artist) {
+  const hay = ' ' + norm(`${v.title} ${v.channel} ${v.desc || ''}`) + ' ';
+  const chan = norm(v.channel).replace(/ /g, '');
+  const names = [...new Set([norm(artist), mainArtist(artist), ...artistParts(artist)])].filter(Boolean).map(n => n.replace(/^the /, ''));
+  return names.some(n => hay.includes(' ' + n + ' ') || (n.length >= 3 && chan.startsWith(n.replace(/ /g, ''))) || (n.length >= 6 && hay.replace(/ /g, '').includes(n.replace(/ /g, ''))));
+}
+const isoSecs = d => { const m = String(d || '').match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); return m ? ((+m[1] || 0) * 86400 + (+m[2] || 0) * 3600 + (+m[3] || 0) * 60 + (+m[4] || 0)) : 0; };
 function scoreVideo(v, artist, title) {
   const t = norm(v.title), c = norm(v.channel), a = norm(artist);
   const s = norm(String(title).replace(/\s*[\(\[](feat|ft|with)[^\)\]]*[\)\]]/i, ''));
@@ -1257,99 +1379,140 @@ function scoreVideo(v, artist, title) {
   else if (/official (music )?video/.test(t)) sc += pe ? 1 : 2;   // music videos get bleeped more often than audio uploads
   else if (/visuali[sz]er/.test(t)) sc += 1;
   for (const b of BAD_WORDS) if (new RegExp('\\b' + b + '\\b').test(t) && !s.includes(b)) sc -= 5;
+  for (const re of ALTERED) if (re.test(t) && !re.test(s)) sc -= 30;    // slowed, reverb, sped up and friends
   if (/\blyrics?\b/.test(t)) sc -= 1;
+  if (!hasArtist(v, artist)) sc -= 30;                                    // a different artist's song with the same name
+  if (v.category) { if (BAD_CATEGORY[v.category]) sc -= 30; else if (String(v.category) === '10') sc += 2; }
+  if (v.secs) { if (v.secs < 75 || v.secs > 15 * 60) sc -= 30; }          // clips, highlight reels, hour-long loops
   if (pe) {
     const ht = versionHint(v.title, title), hd = versionHint(v.desc, title);
     if (ht.clean || hd.clean) sc -= 12;
     else if (ht.explicit || hd.explicit) sc += 4;
-    if (S.censored && S.censored[v.id]) sc -= 40;
   }
+  if (S.censored && S.censored[v.id]) sc -= 60;
   return sc;
 }
 const isCensored = id => !!(S.censored && S.censored[id]);
 
-const YTQ = { quotaDay: null };
+/* ---------- YouTube lookups: daily allowance, backup key ----------
+   Each Google project gets 10,000 units a day. A search costs 100, reading video details costs 1.
+   The allowance resets at midnight Pacific time. */
+const YT_DAILY = 10000;
+const pacificDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+function ytUse() {
+  const d = pacificDay();
+  if (!S.ytUse || S.ytUse.day !== d) S.ytUse = { day: d, units: [0, 0], out: [false, false] };
+  return S.ytUse;
+}
+const ytKeyList = () => [S.settings.ytKey, S.settings.ytKey2].map(k => String(k || '').trim());
+function ytSlot() { const u = ytUse(), ks = ytKeyList(); for (let i = 0; i < 2; i++) if (ks[i] && !u.out[i]) return { i, key: ks[i] }; return null; }
+const ytOut = () => !ytSlot();
+function ytLeft() { const u = ytUse(), ks = ytKeyList(); let n = 0; for (let i = 0; i < 2; i++) if (ks[i] && !u.out[i]) n += Math.max(0, YT_DAILY - u.units[i]); return n; }
+// when the allowance comes back, in the listener's own time ("3 AM")
+function ytResetText() {
+  try {
+    const now = new Date(), la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const next = new Date(la); next.setHours(24, 0, 0, 0);
+    return fmtClock(new Date(now.getTime() + (next - la)));
+  } catch (e) { return 'midnight Pacific'; }
+}
+async function ytFetch(path, params, units) {
+  for (let tries = 0; tries < 3; tries++) {
+    const slot = ytSlot();
+    if (!slot) return { out: true };
+    let res;
+    try { res = await fetch(`https://www.googleapis.com/youtube/v3/${path}?` + new URLSearchParams({ ...params, key: slot.key })); }
+    catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection."); }
+    const u = ytUse(); u.units[slot.i] += units; if (u.units[slot.i] >= YT_DAILY) u.out[slot.i] = true; saveSoon();
+    const data = await res.json().catch(() => null);
+    if (res.ok) return { data };
+    const e = ytErr(res.status, data);
+    if (e.quota) {
+      u.out[slot.i] = true; saveSoon();
+      if (ytSlot()) toast("Your YouTube key is used up for today, so the station switched to your backup key.", 6000);
+      else toast(`Today's YouTube lookups are used up, so the station will play songs it already found until ${ytResetText()}.`, 8000);
+      continue;
+    }
+    if (slot.i === 1) { u.out[1] = true; saveSoon(); toast(`Your backup YouTube key didn't work: ${e.msg}`, 7000); continue; }
+    throw new UserError(e.msg, { fatal: true });
+  }
+  return { out: true };
+}
+
+const CHECK_V = 2;   // bump to re-verify songs saved by older versions
 const inflight = new Map();
 async function findVideos(artist, title) {
   const k = norm(artist) + '|' + norm(title);
   if (inflight.has(k)) return inflight.get(k);
   const p = (async () => {
     let ids = (S.ytCache[k] || []).filter(id => !isCensored(id));
-    if (ids.length && preferExplicit() && !(S.ytChecked && S.ytChecked[k]) && YTQ.quotaDay !== today()) ids = await recheckVideos(artist, title, k, ids);
+    if (ids.length && (S.ytChecked || {})[k] !== CHECK_V && !ytOut()) ids = await recheckVideos(artist, title, k, ids);
     if (ids.length) return ids;
-    if (YTQ.quotaDay === today()) return [];
+    if (ytOut()) return [];
     return searchVideos(artist, title, k);
   })();
   inflight.set(k, p);
   try { return await p; } finally { inflight.delete(k); }
 }
-// Full descriptions for a few videos. Costs 1 unit of the daily YouTube allowance, where a search costs 100.
+// Full details for up to 50 videos: description, category and length. Costs 1 unit, where a search costs 100.
 async function videoDetails(ids) {
-  const key = (S.settings.ytKey || '').trim();
-  if (!key || !ids.length) return {};
+  if (!ids.length) return {};
   try {
-    const res = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({ part: 'snippet', id: ids.slice(0, 50).join(','), key }));
-    if (!res.ok) return {};
-    const data = await res.json();
+    const r = await ytFetch('videos', { part: 'snippet,contentDetails', id: ids.slice(0, 50).join(',') }, 1);
+    if (!r.data) return null;
     const out = {};
-    (data.items || []).forEach(it => { if (it && it.id && it.snippet) out[it.id] = { id: it.id, title: it.snippet.title || '', channel: it.snippet.channelTitle || '', desc: it.snippet.description || '' }; });
+    (r.data.items || []).forEach(it => {
+      if (!it || !it.id || !it.snippet) return;
+      out[it.id] = { id: it.id, title: it.snippet.title || '', channel: it.snippet.channelTitle || '', desc: it.snippet.description || '', category: it.snippet.categoryId || '', secs: isoSecs(it.contentDetails && it.contentDetails.duration) };
+    });
     return out;
-  } catch (e) { return {}; }
+  } catch (e) { return null; }
 }
 function rankVideos(list, artist, title) {
-  return list.map(v => ({ ...v, score: scoreVideo(v, artist, title) })).filter(v => v.score > 0).sort((x, y) => y.score - x.score);
+  let ranked = list.map(v => ({ ...v, score: scoreVideo(v, artist, title) })).filter(v => v.score > 0);
+  // a slowed or sped-up upload runs noticeably longer or shorter than the real one
+  const lens = ranked.map(v => v.secs).filter(Boolean).sort((x, y) => x - y);
+  if (lens.length >= 3) {
+    const mid = lens[Math.floor(lens.length / 2)];
+    ranked = ranked.map(v => v.secs && Math.abs(v.secs - mid) > Math.max(20, mid * 0.12) ? { ...v, score: v.score - 6 } : v).filter(v => v.score > 0);
+  }
+  return ranked.sort((x, y) => y.score - x.score);
 }
 const looksClean = (v, title) => versionHint(v.title, title).clean || versionHint(v.desc, title).clean;
 // uploads labeled clean only stay on the list when there's nothing else
 const dropClean = (ranked, title) => { if (!preferExplicit()) return ranked; const ok = ranked.filter(v => !looksClean(v, title)); return ok.length ? ok : ranked; };
 function storeVideos(k, ids) {
-  if (!ids.length) return;
-  S.ytCache[k] = ids;
   S.ytChecked = S.ytChecked || {};
-  if (preferExplicit()) S.ytChecked[k] = 1;
+  if (ids.length) S.ytCache[k] = ids; else delete S.ytCache[k];
+  S.ytChecked[k] = CHECK_V;
   const keys = Object.keys(S.ytCache);
   if (keys.length > 800) keys.slice(0, 200).forEach(x => { delete S.ytCache[x]; delete S.ytChecked[x]; });
   saveSoon();
 }
-// a song the station found before this update: read the saved uploads' descriptions and re-rank them
+// a song saved by an older version: read the saved uploads' details and re-rank them with today's checks
 async function recheckVideos(artist, title, k, ids) {
   const det = await videoDetails(ids);
-  if (!Object.keys(det).length) return ids;                       // couldn't check right now, try another time
-  const ranked = rankVideos(ids.map(id => det[id]).filter(Boolean), artist, title);
+  if (!det) return ids;                                            // couldn't check right now, try another time
+  const ranked = dropClean(rankVideos(ids.map(id => det[id]).filter(Boolean), artist, title), title);
   const best = ranked[0];
-  if (best && !looksClean(best, title)) {
-    const out = dropClean(ranked, title).map(v => v.id);
-    storeVideos(k, out);
-    return out;
-  }
-  // every saved upload looks clean: one fresh search for the explicit one
-  if (YTQ.quotaDay === today()) return ranked.length ? ranked.map(v => v.id) : ids;
-  const fresh = await searchVideos(artist, title, k, 'explicit', ranked);
-  return fresh.length ? fresh : ids;
+  if (best && !(preferExplicit() && looksClean(best, title))) { const out = ranked.map(v => v.id); storeVideos(k, out); return out; }
+  // nothing saved passes, or it's all clean: search again, but only while there's allowance to spare
+  if (ytLeft() < 1500) { const out = ranked.map(v => v.id); if (out.length) storeVideos(k, out); return out; }
+  return searchVideos(artist, title, k, best ? 'explicit' : '', ranked);
 }
 async function searchVideos(artist, title, k, extra = '', also = []) {
-  const key = (S.settings.ytKey || '').trim();
-  if (!key) throw new UserError('Add your YouTube API key in Settings first.', { fatal: true });
-  const qs = new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}${extra ? ' ' + extra : ''}`, key });
-  let res;
-  try { res = await fetch('https://www.googleapis.com/youtube/v3/search?' + qs); }
-  catch (e) { throw new UserError(looksPreview ? 'YouTube is blocked here. Open the station from your GitHub Pages link.' : "Couldn't reach YouTube. Check your connection."); }
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    const e = ytErr(res.status, data);
-    if (e.quota) { if (YTQ.quotaDay !== today()) toast("Today's YouTube lookups ran out, so the station will stick to songs it already found until they reset.", 7000); YTQ.quotaDay = today(); return []; }
-    throw new UserError(e.msg, { fatal: true });
-  }
-  const found = (data.items || []).filter(it => it.id && it.id.videoId)
+  if (!ytKeyList()[0]) throw new UserError('Add your YouTube API key in Settings first.', { fatal: true });
+  const r = await ytFetch('search', { part: 'snippet', type: 'video', maxResults: '8', videoEmbeddable: 'true', videoSyndicated: 'true', q: `${artist} ${title}${extra ? ' ' + extra : ''}` }, 100);
+  if (!r.data) return also.filter(v => !isCensored(v.id)).map(v => v.id);
+  const found = (r.data.items || []).filter(it => it.id && it.id.videoId)
     .map(it => ({ id: it.id.videoId, title: decode(it.snippet.title), channel: decode(it.snippet.channelTitle || ''), desc: decode(it.snippet.description || '') }));
   const seen = new Set(found.map(v => v.id));
-  let ranked = rankVideos([...found, ...also.filter(v => !seen.has(v.id))], artist, title);
-  if (preferExplicit() && ranked.length) {
-    // the search only shows the start of each description, so read the top few in full
-    const det = await videoDetails(ranked.slice(0, 6).map(v => v.id));
-    if (Object.keys(det).length) ranked = rankVideos(ranked.map(v => det[v.id] ? { ...v, desc: det[v.id].desc } : v), artist, title);
-  }
-  const vids = dropClean(ranked.filter(v => !isCensored(v.id)), title).slice(0, 5).map(v => v.id);
+  let pool = [...found, ...also.filter(v => !seen.has(v.id))];
+  // the search only shows a snippet, so read every result in full: artist, category and length
+  const det = await videoDetails(found.map(v => v.id)) || {};
+  if (Object.keys(det).length) pool = pool.map(v => det[v.id] ? { ...v, ...det[v.id], title: det[v.id].title || v.title } : v);
+  const ranked = dropClean(rankVideos(pool.filter(v => !isCensored(v.id)), artist, title), title);
+  const vids = ranked.slice(0, 5).map(v => v.id);
   storeVideos(k, vids);
   return vids;
 }
@@ -1886,9 +2049,19 @@ function maybeStartBriefing() {
   if (S.briefing && S.briefing.date === today()) return;
   Eng.briefTried = today();
   Eng.briefP = genBriefing()
-    .then(b => { S.briefing = b; save(); renderAll(); })
+    .then(b => { S.briefing = b; logNews(b); save(); renderAll(); })
     .catch(e => { if (e.fatal) return; toast("Today's briefing didn't come through. " + (e.message || ''), 6000); })
     .finally(() => { Eng.briefP = null; });
+}
+/* new releases: looked up once a day, in the background */
+function maybeFindReleases() {
+  if (!S.settings.releasesOn || Eng.relP || Eng.relTried === today()) return;
+  if (S.releases && S.releases.date === today()) return;
+  Eng.relTried = today();
+  Eng.relP = genReleases()
+    .then(r => { if (r.items.length) { S.releases = r; save(); renderAll(); } })
+    .catch(() => {})
+    .finally(() => { Eng.relP = null; });
 }
 
 /* picking songs a few at a time */
@@ -1898,7 +2071,7 @@ function planMore(first) {
   const opts = {
     after: [...(Eng.session ? Eng.session.tracks.slice(-3) : []), ...Eng.upcoming],
     exclude: [...Eng.upcoming, ...todaysTracks()],
-    request: req, known: YTQ.quotaDay === today() ? knownSongs() : null
+    request: req, known: ytOut() ? knownSongs() : null
   };
   Eng.planP = planSet(blk, first ? 3 : 5, opts).then(r => {
     if (Eng.block !== blk) return;
@@ -1911,7 +2084,7 @@ function planMore(first) {
 function planNextBlock() {
   const nb = nextBlockOf(Eng.block);
   if (!nb || nb.id === Eng.block.id || Eng.nextPlanP || (Eng.nextPlan && Eng.nextPlan.blockId === nb.id) || Date.now() < (Eng.nextPlanRetryAt || 0)) return;
-  Eng.nextPlanP = planSet(nb, 3, { exclude: [...Eng.upcoming, ...todaysTracks()], known: YTQ.quotaDay === today() ? knownSongs() : null })
+  Eng.nextPlanP = planSet(nb, 3, { exclude: [...Eng.upcoming, ...todaysTracks()], known: ytOut() ? knownSongs() : null })
     .then(r => { Eng.nextPlan = { blockId: nb.id, tracks: r.tracks, topic: r.topic }; if (r.tracks[0]) resolveTrack(r.tracks[0]).catch(() => {}); })
     .catch(() => { Eng.nextPlanRetryAt = Date.now() + 60000; })
     .finally(() => { Eng.nextPlanP = null; });
@@ -2264,7 +2437,7 @@ function tuneIn() {
   const blk = blockAt(new Date(Date.now() + 90e3));
   if (Eng.block && blk && Eng.block.id === blk.id) Eng.needOpen = Eng.needOpen || { kind: 'welcome' };
   else { Eng.block = null; Eng.prep = null; }
-  maybeStartBriefing();
+  maybeStartBriefing(); maybeFindReleases();
   setOnAir(true); keepAwake(true);
   const my = Eng.token + 1;
   Eng.introP = (async () => {
@@ -2309,10 +2482,16 @@ function skip() {
     fadeTo(0, 450).then(() => { if (Vid.pending === pv) { try { player.pauseVideo(); } catch (e) {} pv.finish('aborted'); } });
   }
 }
-/* "Censored": this upload is the clean version. Remember it, then switch to the next best
-   upload of the same song at the same spot, searching once more for the explicit one if needed. */
-async function reportCensored() {
-  const t = Eng.cur, pv = Vid.pending;
+/* "Wrong version": this upload is censored, slowed or a remix, or not the right song at all.
+   Remember it, then switch to the next best upload of the same song at the same spot,
+   searching once more if there's nothing left to switch to. */
+const WRONG = {
+  censored: { extra: 'explicit', look: 'Got it. Looking for the explicit version.', none: "Couldn't find an uncensored version of this one, so it's skipping it." },
+  altered: { extra: 'official audio', look: 'Got it. Looking for the original version.', none: "Couldn't find the original version of this one, so it's skipping it." },
+  song: { extra: '', look: 'Got it. Looking for the right song.', none: "Couldn't find this song on YouTube, so it's skipping it." }
+};
+async function reportWrong(kind) {
+  const t = Eng.cur, pv = Vid.pending, w = WRONG[kind] || WRONG.song;
   if (!Eng.on || !t || !pv || !t.videoIds || Eng.swapping) return;
   const vi = t.vi || 0, bad = t.videoIds[vi];
   S.censored = S.censored || {};
@@ -2326,16 +2505,17 @@ async function reportCensored() {
   Eng.swapping = true; renderLive();
   try {
     if (!alts.length) {
-      if (YTQ.quotaDay === today()) { toast("That upload won't play again. Today's YouTube lookups are used up, so there's nothing else to switch to. Skipping it."); skip(); return; }
-      toast('Got it. Looking for the explicit version.');
-      const det = await videoDetails(t.videoIds.filter(id => !isCensored(id)));
-      alts = (await searchVideos(t.artist, t.title, k, 'explicit', Object.values(det))).filter(id => !isCensored(id));
+      if (ytOut()) { toast(`That upload won't play again. Today's YouTube lookups are used up, so there's nothing else to switch to. Skipping it.`); skip(); return; }
+      toast(w.look);
+      const det = await videoDetails(t.videoIds.filter(id => !isCensored(id))) || {};
+      alts = (await searchVideos(t.artist, t.title, k, w.extra, Object.values(det))).filter(id => !isCensored(id));
       if (Eng.cur !== t || Vid.pending !== pv) return;   // the song ended or got skipped meanwhile
     }
-    if (!alts.length) { toast("Couldn't find another version of this one, so it's skipping it. That upload won't play again."); skip(); return; }
+    if (!alts.length) { toast(`${w.none} That upload won't play again.`); skip(); return; }
     const tm = vidTimes();
     t.videoIds = [...t.videoIds.slice(0, vi + 1), ...alts];
-    t.swapAt = tm && tm.c > 3 && tm.left > 15 ? Math.max(0, tm.c - 1) : 0;
+    // a wrong song starts over; a censored or slowed one picks up at the same spot
+    t.swapAt = kind !== 'song' && tm && tm.c > 3 && tm.left > 15 ? Math.max(0, tm.c - 1) : 0;
     stopVoice(); Eng.cutTalk = true;
     pv.fading = true;
     await fadeTo(0, 350);
@@ -2374,7 +2554,7 @@ async function sendRequest(text) {
   toast('Request in. Finding it now.');
   const blk = Eng.block;
   try {
-    const r = await planSet(blk, 2, { request: text, after: [...(Eng.session ? Eng.session.tracks.slice(-2) : [])], exclude: [...Eng.upcoming, ...todaysTracks()], known: YTQ.quotaDay === today() ? knownSongs() : null });
+    const r = await planSet(blk, 2, { request: text, after: [...(Eng.session ? Eng.session.tracks.slice(-2) : [])], exclude: [...Eng.upcoming, ...todaysTracks()], known: ytOut() ? knownSongs() : null });
     if (Eng.block !== blk || !Eng.on) return;
     const reqT = r.tracks.find(t => t.request) || r.tracks[0];
     if (!reqT) { toast("Couldn't find that one. Try wording it another way."); return; }
@@ -2493,7 +2673,8 @@ function renderLive() {
     $('#tLink').href = ytmLink(shown);
   }
   $('#verdicts').hidden = !t;
-  $('#censorBtn').disabled = !!Eng.swapping;
+  $('#wrongBtn').disabled = !!Eng.swapping;
+  if (!t || Eng.swapping) $('#wrongRow').hidden = true;
   if (t) $$('#verdicts .chip').forEach(c => { const v = t.verdict === c.dataset.verdict; c.classList.toggle('on', v); c.setAttribute('aria-pressed', String(v)); });
   $('#playBtn').innerHTML = Eng.paused ? ICON.play + 'Resume' : ICON.pause + 'Pause';
   $('#skipBtn').disabled = !on;
@@ -2548,6 +2729,11 @@ function renderSched() {
   const spent = S.spend[today()] || 0;
   const vs = (S.vspend && S.vspend[today()]) || 0;
   $('#spendLine').textContent = `Today's cost: ${fmtCost(spent)}${vs ? `, including ${fmtCost(vs)} for expressive voices` : ''}`;
+  if (!ytKeyList()[0]) { $('#ytLine').textContent = ''; return; }
+  const left = Math.floor(ytLeft() / 100);
+  $('#ytLine').textContent = ytOut()
+    ? `YouTube lookups are used up until ${ytResetText()}, so it's playing songs it already found.`
+    : `YouTube lookups left today: about ${left} new song${left === 1 ? '' : 's'}${ytKeyList()[1] ? ', backup key included' : ''}. Songs it already found don't count.`;
 }
 function renderAir() {
   const st = S.settings;
@@ -2607,8 +2793,8 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'preferExplicit', 'briefingOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
-const KEY_FIELDS = ['claudeKey', 'ytKey', 'ttsKey'];
+const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
   const m = voiceMode();
@@ -2777,14 +2963,20 @@ async function testKeys() {
     }
     catch (e) { res.push(line(false, `${modelName(m)}: ${e.message}`)); }
   }
-  try {
-    const key = (S.settings.ytKey || '').trim();
-    if (!key) throw new UserError('Add your YouTube API key first.');
-    const r = await fetch('https://www.googleapis.com/youtube/v3/search?' + new URLSearchParams({ part: 'snippet', type: 'video', maxResults: '1', q: 'Lucky Daye Roll Some Mo', key }));
-    const d = await r.json().catch(() => null);
-    if (!r.ok) throw new UserError(ytErr(r.status, d).msg);
-    res.push(line(true, 'YouTube key'));
-  } catch (e) { res.push(line(false, e.message || "Couldn't reach YouTube.")); }
+  // a tiny lookup (1 unit) instead of a search (100), for each YouTube key
+  const ks = ytKeyList();
+  for (let i = 0; i < 2; i++) {
+    const label = i ? 'Backup YouTube key' : 'YouTube key';
+    if (!ks[i]) { if (!i) res.push(line(false, 'Add your YouTube API key first.')); continue; }
+    try {
+      const r = await fetch('https://www.googleapis.com/youtube/v3/videos?' + new URLSearchParams({ part: 'id', id: 'jNQXAC9IVRw', key: ks[i] }));
+      const d = await r.json().catch(() => null);
+      if (r.ok) { res.push(line(true, label)); continue; }
+      const e = ytErr(r.status, d);
+      if (e.quota) { res.push(line(true, `${label}, but it's used up for today`)); continue; }
+      res.push(line(false, `${label}: ${e.msg}`));
+    } catch (e) { res.push(line(false, `${label}: couldn't reach YouTube.`)); }
+  }
   if (googleMode()) {
     unlockAudio();
     for (const k of [...ttsCache.keys()]) if (k.endsWith('|Test.')) ttsCache.delete(k);   // really ask Google, don't reuse an old test
@@ -2917,11 +3109,11 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.3', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.4', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
     preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
-    onAir: !!Eng.on, upcoming: Eng.upcoming.length, ytLookupsOut: YTQ.quotaDay === today(),
+    onAir: !!Eng.on, upcoming: Eng.upcoming.length, youtube: { left: ytLeft(), use: ytUse(), backupKey: !!ytKeyList()[1] },
     problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded'
   }, null, 1);
 }
@@ -2946,7 +3138,7 @@ async function copyText(text) {
 
 /* ---------- data ---------- */
 function exportData() {
-  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '', ttsKey: '' } };
+  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '' } };
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -2962,7 +3154,7 @@ function importData(file) {
       const d = JSON.parse(r.result);
       if (!d || !d.settings || !(Array.isArray(d.sessions) || Array.isArray(d.shows))) throw new Error('shape');
       if (Eng.on) haltAir();
-      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey, ttsKey: S.settings.ttsKey };
+      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey, ytKey2: S.settings.ytKey2, ttsKey: S.settings.ttsKey };
       localStorage.setItem(LS_KEY, JSON.stringify({ ...d, settings: { ...d.settings, ...keep } }));
       S = loadState();
       Eng.block = null; Eng.session = null; Eng.upcoming = [];
@@ -2992,9 +3184,14 @@ $('#playBtn').addEventListener('click', togglePlay);
 $('#miniPlay').addEventListener('click', togglePlay);
 $('#skipBtn').addEventListener('click', skip);
 $('#verdicts').addEventListener('click', e => {
-  if (e.target.closest('#censorBtn')) { reportCensored(); return; }
+  if (e.target.closest('#wrongBtn')) { const r = $('#wrongRow'); r.hidden = !r.hidden; return; }
   const c = e.target.closest('[data-verdict]'); if (!c || !Eng.cur) return;
   setVerdict(Eng.cur, c.dataset.verdict);
+});
+$('#wrongRow').addEventListener('click', e => {
+  const c = e.target.closest('[data-wrong]'); if (!c) return;
+  $('#wrongRow').hidden = true;
+  reportWrong(c.dataset.wrong);
 });
 $('#upList').addEventListener('click', e => {
   const b = e.target.closest('[data-act="now"]'); if (!b) return;
@@ -3128,7 +3325,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { versionHint, rankVideos, reportCensored, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
+window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
 })();
 
 </script>
