@@ -501,6 +501,15 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f" for="s-tasteNotes">What you like about music
           <textarea id="s-tasteNotes"></textarea>
         </label>
+        <div class="two">
+          <label class="f" for="s-artistMax">Max plays per artist
+            <select id="s-artistMax"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+          </label>
+          <label class="f" for="s-artistHours">In any
+            <select id="s-artistHours"><option value="0.5">30 minutes</option><option value="1">1 hour</option><option value="2">2 hours</option><option value="3">3 hours</option></select>
+          </label>
+        </div>
+        <p class="note">Keeps one artist from taking over. The count rolls, so once an older play is past the window, that artist can come back. Never two in a row either way.</p>
         <label class="switch" for="s-preferExplicit">Prefer explicit versions<input type="checkbox" id="s-preferExplicit"></label>
         <p class="note">YouTube doesn't label clean and explicit versions, so the station goes by how uploads are named and steers away from ones marked clean, edited or radio edit. If a censored one still gets through, tap Wrong version under the song, then Censored. It switches versions and remembers.</p>
       </fieldset>
@@ -661,6 +670,8 @@ const DEFAULT_SETTINGS = {
   briefingOn: true,
   releasesOn: true,
   preferExplicit: true,
+  artistMax: '2',
+  artistHours: '1',
   topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
   houseRules: 'Keep it fun and loose. Light cursing is fine. Tease each other all you want, but be good to the listener: never compare them to anyone, never rush them, always use their name. No jokes about real people’s looks or identities.',
   voiceMode: 'natural',
@@ -973,18 +984,30 @@ function knownSongs(gap = 30) {
 }
 
 /* ---------- variety ---------- */
-// who has played a lot lately, so the picker can give other artists a turn
-function artistLoad() {
-  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-  const recent = new Map(), today = new Map();
-  S.played.slice(0, 40).forEach((p, i) => {
+// who has played a lot lately, so the picker can give other artists a turn.
+// The limit rolls: at most artistMax plays per artist in any artistHours stretch, so a favorite comes back once older plays age out.
+function artistRule() {
+  const max = Math.max(1, Math.min(6, parseInt(S.settings.artistMax, 10) || 2));
+  const hours = Math.max(0.5, Math.min(6, parseFloat(S.settings.artistHours) || 1));
+  return { max, hours, ms: hours * 3600e3 };
+}
+function artistLoad(now = Date.now()) {
+  const rule = artistRule(), since = now - rule.ms;
+  const window = new Map(), last = new Map(), names = new Map();
+  for (const p of S.played.slice(0, 120)) {
     const a = mainArtist(p.artist);
-    if (i < 30) recent.set(a, (recent.get(a) || 0) + 1);
-    if ((p.at || 0) >= dayStart.getTime()) today.set(a, (today.get(a) || 0) + 1);
-  });
-  const names = new Map(S.played.slice(0, 40).map(p => [mainArtist(p.artist), p.artist]));
-  const heavy = [...names.keys()].filter(a => (recent.get(a) || 0) >= 2 || (today.get(a) || 0) >= 3).map(a => names.get(a));
-  return { recent, today, heavy };
+    if (!names.has(a)) names.set(a, p.artist);
+    if (!last.has(a)) last.set(a, p.at || 0);
+    if ((p.at || 0) >= since) window.set(a, (window.get(a) || 0) + 1);
+  }
+  // songs already lined up will play inside the same stretch, so they count too
+  for (const t of (Eng.upcoming || [])) {
+    const a = mainArtist(t.artist);
+    window.set(a, (window.get(a) || 0) + 1);
+    if (!names.has(a)) names.set(a, t.artist);
+  }
+  const heavy = [...window.keys()].filter(a => window.get(a) >= rule.max).map(a => names.get(a));
+  return { window, last, heavy, rule };
 }
 // a different handful of the listener's artists each time, so it isn't always the same five names
 function artistSample(n = 6) {
@@ -1045,7 +1068,7 @@ async function planSet(block, n, opts = {}) {
     `About ${L()}'s taste: ${st.tasteNotes}`
   ];
   const load = artistLoad();
-  if (load.heavy.length && !opts.known) lines.push(`Played a lot lately, so leave these artists out this time: ${load.heavy.join(', ')}`);
+  if (load.heavy.length && !opts.known) lines.push(`Already played ${load.rule.max} time${load.rule.max === 1 ? '' : 's'} in the last ${load.rule.hours === 1 ? 'hour' : load.rule.hours + ' hours'}, so leave these artists out this time: ${load.heavy.join(', ')}`);
   const fresh = opts.known ? [] : freshReleases();
   if (fresh.length) lines.push(`New releases from the last few weeks, found by today's web search, so they are real even if you don't know them: ${fresh.map(x => `${x.artist} - ${x.title}${x.project ? ` (${x.project})` : ''}`).join('; ')}. Work one of these in when it fits the show, tagged "new".`);
   if (ctx.loved.length) lines.push(`Songs ${L()} loved recently: ${ctx.loved.join('; ')}`);
@@ -1073,8 +1096,11 @@ async function planSet(block, n, opts = {}) {
   const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
   // with the lookups used up, replays from earlier today are fine; only what's already lined up is off limits
   const taken = new Set((opts.known ? (Eng.upcoming || []) : (opts.exclude || [])).map(trackKey));
-  // artist cooldown: nobody from the last 8 songs or already lined up, nobody twice in a set, three a day at most
-  const cool = new Set([...S.played.slice(0, 8), ...(Eng.upcoming || []), ...(opts.after || [])].map(x => mainArtist(x.artist)));
+  // artist cooldown: never back to back (nobody from the last 3 songs or what's lined up right before),
+  // nobody twice in one set, and at most artistMax plays in any rolling artistHours stretch
+  const near = [...S.played.slice(0, 3), ...(opts.after || []).slice(-3), ...(Eng.upcoming || []).slice(-3)];
+  const cool = new Set(near.map(x => mainArtist(x.artist)));
+  const count = new Map(load.window);
   const setArtists = new Set();
   const pool = blockHosts(block).map(hostById);
   const tracks = [], held = [];
@@ -1090,11 +1116,16 @@ async function planSet(block, n, opts = {}) {
     const ma = mainArtist(t.artist);
     taken.add(k);
     // over-played artists wait their turn, unless that would leave nothing to play
-    if (!isReq && !opts.known && (cool.has(ma) || setArtists.has(ma) || (load.today.get(ma) || 0) >= 3)) { held.push(t); return; }
+    if (!isReq && !opts.known && (cool.has(ma) || setArtists.has(ma) || (count.get(ma) || 0) >= load.rule.max)) { held.push(t); return; }
     setArtists.add(ma);
+    count.set(ma, (count.get(ma) || 0) + 1);
     tracks.push(t);
   });
-  if (!tracks.length && held.length) tracks.push(held[0]);
+  // nothing passed: play the held song whose artist has gone the longest without a play, rather than going quiet
+  if (!tracks.length && held.length) {
+    held.sort((a, b) => (load.last.get(mainArtist(a.artist)) || 0) - (load.last.get(mainArtist(b.artist)) || 0));
+    tracks.push(held[0]);
+  }
   return { tracks: tracks.slice(0, n + 1), topic: cleanHost(d.topic || ''), cost: r.cost };
 }
 
@@ -2793,7 +2824,7 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
 const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
@@ -3109,7 +3140,7 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.4', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.5', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
     preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
