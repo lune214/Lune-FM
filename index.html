@@ -498,6 +498,9 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
           <textarea id="s-artists"></textarea>
           <small>Separate with commas. The shows lean on these but find new people too.</small>
         </label>
+        <label class="switch" for="s-growArtists">Add artists I keep loving<input type="checkbox" id="s-growArtists"></label>
+        <p class="note">When you tap Love it or More like this on two different songs by someone who isn't on your list, they get added.</p>
+        <p class="note" id="grownNote" hidden></p>
         <label class="f" for="s-tasteNotes">What you like about music
           <textarea id="s-tasteNotes"></textarea>
         </label>
@@ -670,6 +673,8 @@ const DEFAULT_SETTINGS = {
   briefingOn: true,
   releasesOn: true,
   preferExplicit: true,
+  growArtists: true,
+  autoAdded: [],
   artistMax: '2',
   artistHours: '1',
   topics: 'tech and gadgets, anime, video games, snack and food hot takes, silly would-you-rather questions, movies and shows, music gear and production, weird hypotheticals',
@@ -2601,6 +2606,44 @@ async function sendRequest(text) {
   } catch (e) { toast(e.message || "The request didn't go through."); }
 }
 
+/* ---------- growing the artist list ---------- */
+// After two different loved songs (Love it or More like this) from an artist who isn't on the list, add them.
+// Anyone it added and you later took off the list stays off.
+const GROW_AT = 2;
+const listArtists = () => String(S.settings.artists || '').split(',').map(x => x.trim()).filter(Boolean);
+function artistsToAdd() {
+  if (S.settings.growArtists === false) return [];
+  const have = new Set(listArtists().map(mainArtist));
+  const added = new Set((S.settings.autoAdded || []).map(mainArtist));
+  const songs = new Map(), names = new Map();
+  for (const f of S.feedback) {
+    if (f.verdict !== 'love' && f.verdict !== 'more') continue;
+    const a = mainArtist(f.artist || '');
+    if (!a || have.has(a) || added.has(a)) continue;
+    if (!songs.has(a)) { songs.set(a, new Set()); names.set(a, String(f.artist).split(/\s*(?:,|&|\bx\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)[0].trim() || f.artist); }
+    songs.get(a).add(f.k || trackKey(f));
+  }
+  return [...songs.keys()].filter(a => songs.get(a).size >= GROW_AT).map(a => names.get(a));
+}
+function growArtists(quiet) {
+  const add = artistsToAdd();
+  if (!add.length) return [];
+  S.settings.artists = [...listArtists(), ...add].join(', ');
+  S.settings.autoAdded = [...(S.settings.autoAdded || []), ...add];
+  save();
+  const el = $('#s-artists'); if (el && document.activeElement !== el) el.value = S.settings.artists;
+  renderGrown();
+  if (!quiet) toast(add.length === 1 ? `You keep loving ${add[0]}, so they're on your artists list now.` : `Added to your artists list: ${add.join(', ')}.`, 5200);
+  return add;
+}
+function renderGrown() {
+  const el = $('#grownNote'); if (!el) return;
+  const have = new Set(listArtists().map(mainArtist));
+  const on = (S.settings.autoAdded || []).filter(a => have.has(mainArtist(a)));
+  el.hidden = !on.length;
+  el.textContent = on.length ? `Added for you so far: ${on.join(', ')}. Delete any you don't want and they won't come back.` : '';
+}
+
 /* ---------- feedback ---------- */
 function setVerdict(t, v) {
   const k = trackKey(t);
@@ -2615,7 +2658,9 @@ function setVerdict(t, v) {
     const tm = vidTimes();
     if (tm && tm.left > 40) { Eng.prep.dead = true; Eng.prep = null; }
   }
-  toast(({ love: 'Saved to Loved songs.', more: 'Noted. More like this from now on.', skip: 'Got it. Less like this from now on.' })[t.verdict] || 'Cleared.');
+  const grew = (t.verdict === 'love' || t.verdict === 'more') ? growArtists(true) : [];
+  if (grew.length) toast(`${({ love: 'Saved to Loved songs.', more: 'Noted. More like this from now on.' })[t.verdict]} You keep loving ${grew.join(' and ')}, so they're on your artists list now.`, 5200);
+  else toast(({ love: 'Saved to Loved songs.', more: 'Noted. More like this from now on.', skip: 'Got it. Less like this from now on.' })[t.verdict] || 'Cleared.');
   if (t === Eng.cur && t.verdict === 'skip') { if (Eng.prep) { Eng.prep.dead = true; Eng.prep = null; } skip(); }
   renderAll();
 }
@@ -2824,7 +2869,7 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'growArtists', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
 const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
@@ -2844,6 +2889,7 @@ function fillSettings() {
   applyVoiceClass();
   renderShowsEditor();
   renderHostsEditor();
+  renderGrown();
 }
 function onSettingInput(e) {
   const el = e.target;
@@ -2855,6 +2901,8 @@ function onSettingInput(e) {
   S.settings[f] = v;
   if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') { Voice.naturalBroken = null; Voice.expressiveBroken = null; }
   if (f === 'voiceMode') applyVoiceClass();
+  if (f === 'artists') renderGrown();
+  if (f === 'growArtists' && v) growArtists();
   saveSoon(); renderHeader();
   if (KEY_FIELDS.includes(f) || f === 'briefingOn' || f === 'listener') renderAir();
 }
@@ -3140,7 +3188,7 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.5', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.6', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
     preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
@@ -3349,6 +3397,7 @@ window.addEventListener('hashchange', () => { const c = syncCodeFrom(location.ha
 
 /* ---------- boot ---------- */
 S.sessions.forEach(s => s.tracks.forEach(t => { if (t.status === 'playing') t.status = 'played'; }));
+growArtists(false);
 fillSettings();
 go('air');
 renderAll();
@@ -3356,7 +3405,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid };
+window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid, growArtists, artistsToAdd, setVerdict };
 })();
 
 </script>
