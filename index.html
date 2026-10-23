@@ -327,6 +327,8 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <span class="wrongq">What's wrong with it?</span>
         <button class="chip" data-wrong="censored">Censored</button>
         <button class="chip" data-wrong="altered">Slowed or remix</button>
+        <button class="chip" data-wrong="live">Live version</button>
+        <button class="chip" data-wrong="instrumental">Instrumental</button>
         <button class="chip" data-wrong="song">Wrong song</button>
       </div>
     </div>
@@ -462,6 +464,8 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
       <fieldset>
         <legend>Hosts</legend>
         <p class="note">Each host is its own Claude agent with its own personality, voice and notebook. They share the mic, react to each other, and react to what you love or skip.</p>
+        <label class="switch" for="s-hostsGrow">Hosts grow their taste over time<input type="checkbox" id="s-hostsGrow"></label>
+        <p class="note">Once a week, each host looks at their picks and how you reacted, and updates what they're into lately. Their personality stays the same. A few cents a week.</p>
         <div class="cards" id="hostsEd"></div>
         <div class="btnrow"><button type="button" class="btn small" id="addHost">Add a host</button></div>
       </fieldset>
@@ -674,6 +678,7 @@ const DEFAULT_SETTINGS = {
   releasesOn: true,
   preferExplicit: true,
   growArtists: true,
+  hostsGrow: true,
   autoAdded: [],
   artistMax: '2',
   artistHours: '1',
@@ -962,14 +967,42 @@ function extractJSON(text) {
 const normTag = t => { t = norm(t); return t.startsWith('deep') ? 'deep cut' : t.startsWith('fav') ? 'favorite' : t.startsWith('throw') || t.startsWith('classic') ? 'throwback' : 'new'; };
 const fmtT = f => `${f.artist} - ${f.title}`;
 
+/* Songs don't come back for a few days (loved ones sooner), so the same show doesn't play the same set every day. */
+const PLAYED_MAX = 1500;
+const REPEAT_DAYS = 4, LOVED_REPEAT_DAYS = 2;
 function tasteContext() {
   return {
     loved: S.feedback.filter(f => f.verdict === 'love').slice(0, 30).map(fmtT),
     more: S.feedback.filter(f => f.verdict === 'more').slice(0, 15).map(fmtT),
     skipped: S.feedback.filter(f => f.verdict === 'skip').slice(0, 30).map(fmtT),
-    played: S.played.slice(0, 120).map(fmtT)
+    played: playedByArtist()
   };
 }
+// the last few days of plays, grouped by artist so the list stays short: "Smino: Anita, Wild Irish Roses"
+function playedByArtist(days = REPEAT_DAYS, max = 260) {
+  const since = Date.now() - days * 86400e3, groups = new Map();
+  let n = 0;
+  for (const p of S.played) {
+    if (n >= max) break;
+    if (n >= 40 && (p.at || 0) < since) break;           // always at least the last 40, then only the last few days
+    const a = mainArtist(p.artist);
+    if (!groups.has(a)) groups.set(a, { name: String(p.artist).split(/\s*(?:,|&|\bfeat\.?|\bft\.?)\s*/i)[0].trim() || p.artist, titles: [] });
+    groups.get(a).titles.push(p.title);
+    n++;
+  }
+  return [...groups.values()].map(g => `${g.name}: ${g.titles.join(', ')}`);
+}
+// played too recently to come back yet?
+function tooSoon(k, fb, now = Date.now()) {
+  const p = S.played.find(x => x.k === k);
+  if (!p) return false;
+  const v = fb.get(k), days = v === 'love' || v === 'more' ? LOVED_REPEAT_DAYS : REPEAT_DAYS;
+  return now - (p.at || 0) < days * 86400e3;
+}
+// a couple of directions to dig in, different every set, so the picker doesn't land on the same answers
+const DIGS = ['an album track that was never a single', 'something from before 2012', 'something from the last year', 'a collaboration or a feature verse',
+  'an artist with a small following', 'a song from a debut album or a first mixtape', 'a bonus track or a deluxe-edition cut', 'a song built on a classic sample',
+  'a scene outside the US', 'a song from the middle of an album, not the opener or the hit', 'an artist you have not picked for this show before', 'a producer-led project'];
 // Songs the station already found on YouTube, for when the day's lookups run out.
 // Loved songs first, then whatever hasn't played in the longest time.
 function knownSongs(gap = 30) {
@@ -1067,7 +1100,7 @@ async function planSet(block, n, opts = {}) {
     `The show on air: ${block.name}. ${block.about}`,
     '',
     'Hosts on this show:',
-    ...crew.map(h => `- ${h.name}: ${h.personality}`),
+    ...crew.map(h => `- ${h.name}: ${h.personality}${h.lately ? ` Lately: ${h.lately}` : ''}`),
     '',
     `Some artists ${L()} loves (a different handful each time, so everyone gets a turn): ${artistSample().join(', ')}`,
     `About ${L()}'s taste: ${st.tasteNotes}`
@@ -1079,7 +1112,8 @@ async function planSet(block, n, opts = {}) {
   if (ctx.loved.length) lines.push(`Songs ${L()} loved recently: ${ctx.loved.join('; ')}`);
   if (ctx.more.length) lines.push(`${L()} asked for more songs like: ${ctx.more.join('; ')}`);
   if (ctx.skipped.length) lines.push(`Not for ${L()}, so avoid these and anything close to them: ${ctx.skipped.join('; ')}`);
-  if (ctx.played.length) lines.push(`Recently played, do not repeat: ${ctx.played.join('; ')}`);
+  if (ctx.played.length) lines.push(`Played in the last few days, so do not pick any of these songs again: ${ctx.played.join('; ')}`);
+  if (!opts.known && !opts.request) lines.push(`For variety this time, work in one of these if it fits the show: ${shuffle(DIGS).slice(0, 2).join('; or ')}.`);
   if (opts.after && opts.after.length) lines.push('', `Already lined up in this show, in order, so keep the flow going after the last one: ${opts.after.map(fmtT).join('; ')}`);
   if (opts.known) lines.push('', `Today's YouTube lookups ran out, so you can ONLY pick from this list of songs the station already has: ${opts.known.join('; ')}`);
   if (opts.request) lines.push('', `${L()} called the request line asking for: "${opts.request}". The first song must answer that request. If they named a song, play that exact song.`);
@@ -1087,7 +1121,7 @@ async function planSet(block, n, opts = {}) {
     `Pick the next ${n} songs.`,
     'Reply with only a JSON object, no other text before or after it, in this shape. Use single quotes, never double quotes, inside the values:',
     '{"songs": [{"artist": "main artist", "title": "exact song title", "tag": "new or favorite or deep cut or throwback", "why": "one short line for the screen, under 14 words", "picked_by": "host name"}],',
-    ` "topic": "one specific, funny angle for a quick topic break, drawn from these topics: ${st.topics}. Fit it to the hosts on this show."}`,
+    ` "topic": "one specific, funny angle for a quick topic break, drawn from these topics: ${st.topics}. Fit it to the hosts on this show.${recentTopics().length ? ` Not one of these, which already aired lately, and not a reworded version of one: ${recentTopics().join(' | ')}` : ''}"}`,
     `"new" means an artist or song ${L()} probably has not heard yet. "favorite" means a song by an artist ${L()} loves. "deep cut" means a lesser-known song by an artist ${L()} already knows. "throwback" means an older classic.`
   );
   const r = await callClaude({ system, user: lines.join('\n'), maxTokens: 2500 + n * 300, model: st.directorModel, effort: 'low' });
@@ -1099,6 +1133,7 @@ async function planSet(block, n, opts = {}) {
   // with the lookups used up, the pool is small, so only keep out the last few songs
   const recent = new Set(S.played.slice(0, opts.known ? 4 : 150).map(p => p.k));
   const fb = new Map(S.feedback.map(f => [f.k, f.verdict]));
+  const reserve = [];   // songs that only failed the few-days rule, in case nothing else is left
   // with the lookups used up, replays from earlier today are fine; only what's already lined up is off limits
   const taken = new Set((opts.known ? (Eng.upcoming || []) : (opts.exclude || [])).map(trackKey));
   // artist cooldown: never back to back (nobody from the last 3 songs or what's lined up right before),
@@ -1117,6 +1152,7 @@ async function planSet(block, n, opts = {}) {
     if (!isReq && (taken.has(k) || fb.get(k) === 'skip' || recent.has(k))) return;
     t.pickedBy = nameToId(s.picked_by, pool) || pick(pool).id;
     const v = fb.get(k); if (v === 'love' || v === 'more') t.verdict = v;
+    if (!isReq && !opts.known && tooSoon(k, fb)) { reserve.push(t); return; }
     if (isReq) t.request = opts.request;
     const ma = mainArtist(t.artist);
     taken.add(k);
@@ -1127,11 +1163,61 @@ async function planSet(block, n, opts = {}) {
     tracks.push(t);
   });
   // nothing passed: play the held song whose artist has gone the longest without a play, rather than going quiet
+  if (!tracks.length && !held.length && reserve.length) {
+    const at = t => (S.played.find(p => p.k === trackKey(t)) || {}).at || 0;
+    reserve.sort((a, b) => at(a) - at(b));
+    tracks.push(reserve[0]);
+  }
   if (!tracks.length && held.length) {
     held.sort((a, b) => (load.last.get(mainArtist(a.artist)) || 0) - (load.last.get(mainArtist(b.artist)) || 0));
     tracks.push(held[0]);
   }
   return { tracks: tracks.slice(0, n + 1), topic: cleanHost(d.topic || ''), cost: r.cost };
+}
+
+/* ---------- hosts growing their taste ----------
+   Once a week, each host looks at their own picks and how Lune reacted, and rewrites a short
+   "lately" note: where their taste is heading. It grows out of their music lane instead of replacing it. */
+const GROW_EVERY = 7 * 86400e3, GROW_MIN_PICKS = 8;
+function hostPicks(h, since) {
+  const out = [];
+  for (const s of S.sessions) {
+    if (new Date(s.startedAt || 0).getTime() < since) continue;
+    for (const t of s.tracks || []) if (t.pickedBy === h.id && t.status !== 'missing') out.push(t);
+  }
+  return out;
+}
+function dueToGrow(h, now = Date.now()) {
+  if (S.settings.hostsGrow === false || !h.enabled) return false;
+  if (h.latelyAt && now - h.latelyAt < GROW_EVERY) return false;
+  return hostPicks(h, h.latelyAt || now - 14 * 86400e3).length >= GROW_MIN_PICKS;
+}
+async function growHostTaste(h) {
+  const since = h.latelyAt || Date.now() - 14 * 86400e3;
+  const picks = hostPicks(h, since).slice(-40);
+  const how = t => reactionText(t) || 'played all the way through';
+  const loved = S.feedback.filter(f => (f.verdict === 'love' || f.verdict === 'more') && (f.at || 0) >= since).slice(0, 15).map(fmtT);
+  const user = [
+    `Once a week you take stock of how your music taste has been growing from doing the show for ${L()}.`, '',
+    `What you wrote last time about what you're into lately: ${h.lately || 'Nothing yet. This is the first time.'}`, '',
+    'Your picks since then and how it went:', ...picks.map(t => `- ${t.title} by ${t.artist}: ${how(t)}`), '',
+    ...(loved.length ? [`Songs ${L()} loved lately, from anyone's picks:`, ...loved.map(x => `- ${x}`), ''] : []),
+    `Write 2 or 3 sentences, under 60 words, first person, in your own voice, about what you've been getting into lately and where your taste is heading. Grow out of your music lane, don't abandon it. Lean toward what landed with ${L()}, away from what got skipped, and name a sound, a scene, an era or a couple of real artists you want to dig into next.`,
+    'Reply with only JSON: {"lately": "the new note", "change": "what shifted, under 12 words"}'
+  ].join('\n');
+  const r = await callClaude({ system: `You are ${h.name}, a host on ${STN()}, a personal radio station. Who you are: ${h.personality}`, user, maxTokens: 1800, model: S.settings.directorModel, effort: 'low' });
+  const d = extractJSON(r.text);
+  const text = cleanHost(String(d.lately || '')).slice(0, 500);
+  if (!text) { noteFail(`${h.name}'s taste update`, r, 'empty'); throw new UserError('empty'); }
+  if (h.lately) h.latelyLog = [{ at: h.latelyAt || 0, text: h.lately, change: h.latelyChange || '' }, ...(h.latelyLog || [])].slice(0, 4);
+  h.lately = text; h.latelyAt = Date.now(); h.latelyChange = cleanHost(String(d.change || '')).slice(0, 120);
+  return h;
+}
+function undoHostTaste(h) {
+  const prev = (h.latelyLog || [])[0];
+  if (prev) { h.lately = prev.text; h.latelyChange = prev.change || ''; h.latelyLog = h.latelyLog.slice(1); }
+  else { h.lately = ''; h.latelyChange = ''; }
+  h.latelyAt = Date.now();   // don't grow again right away
 }
 
 /* ---------- daily briefing ---------- */
@@ -1217,6 +1303,83 @@ function voiceRule() {
   if (m === 'natural') return '- A voice engine reads your line out loud. Where you would really take a beat, like before a punchline, you can write [short pause] or [long pause], at most one per line. No other brackets, no emojis, markdown or em dashes.';
   return '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.';
 }
+/* ---------- keeping the talk fresh ---------- */
+// topics that already aired, so the picker doesn't hand out "who's the final boss of hip-hop" every day
+function logTopic(topic) {
+  if (!topic) return;
+  S.topicLog = [{ t: String(topic).slice(0, 200), at: Date.now() }, ...(S.topicLog || [])].slice(0, 40);
+  saveSoon();
+}
+const recentTopics = () => (S.topicLog || []).filter(x => Date.now() - x.at < 21 * 86400e3).slice(0, 25).map(x => x.t);
+// phrases a host keeps leaning on across the last few days of shows
+const STOP = new Set('a an the and or but so to of in on at for with is it its it\'s that this was be are you i me my we our your he she they them his her their just like yeah okay oh not no do did got get have has had what who when how all up out one if then than too very really from by as about'.split(' '));
+const phraseCache = new Map();
+function overusedPhrases(hostId, days = 4) {
+  const hit = phraseCache.get(hostId);
+  if (hit && Date.now() - hit.at < 10 * 60e3) return hit.list;
+  const since = Date.now() - days * 86400e3, counts = new Map();
+  for (const s of S.sessions) {
+    if (!s.log || new Date(s.startedAt || s.lastAt || 0).getTime() < since) continue;
+    for (const l of s.log) {
+      if (l.h !== hostId) continue;
+      const w = norm(l.t).split(' ').filter(Boolean), seen = new Set();
+      for (let i = 0; i + 3 <= w.length; i++) {
+        const g = w.slice(i, i + 3);
+        if (g.filter(x => STOP.has(x)).length >= 2) continue;
+        const key = g.join(' ');
+        if (seen.has(key)) continue;
+        seen.add(key); counts.set(key, (counts.get(key) || 0) + 1);
+      }
+    }
+  }
+  // join overlapping three-word pieces back into the full phrase: "final boss of hip hop"
+  const often = k => (counts.get(k) || 0) >= 3, phrases = new Map();
+  for (const s of S.sessions) {
+    if (!s.log || new Date(s.startedAt || s.lastAt || 0).getTime() < since) continue;
+    for (const l of s.log) {
+      if (l.h !== hostId) continue;
+      const w = norm(l.t).split(' ').filter(Boolean), seen = new Set();
+      for (let i = 0; i + 3 <= w.length; i++) {
+        if (!often(w.slice(i, i + 3).join(' '))) continue;
+        let j = i; while (j + 4 <= w.length && often(w.slice(j + 1, j + 4).join(' '))) j++;
+        const ph = w.slice(i, j + 3).join(' '); i = j + 2;
+        if (!seen.has(ph)) { seen.add(ph); phrases.set(ph, (phrases.get(ph) || 0) + 1); }
+      }
+    }
+  }
+  const skip = new Set(String(S.settings.artists || '').split(',').map(norm).join(' ').split(' ').concat(norm(STN()).split(' '), norm(L()).split(' ')));
+  let list = [...phrases.entries()].filter(([k, n]) => n >= 2 && k.split(' ').filter(x => !skip.has(x) && !STOP.has(x)).length >= 2)
+    .sort((a, b) => b[0].split(' ').length - a[0].split(' ').length || b[1] - a[1]).map(([k]) => k);
+  list = list.filter((k, i) => !list.slice(0, i).some(o => o.includes(k))).slice(0, 8);
+  phraseCache.set(hostId, { at: Date.now(), list });
+  return list;
+}
+// notebook notes that survive too many shows turn into a broken record, so they retire
+const NOTE_LIFE = 5;
+const noteWords = n => new Set(norm(n).split(' ').filter(x => x.length > 2 && !STOP.has(x)));
+function sameNote(a, b) {
+  const x = noteWords(a), y = noteWords(b); if (!x.size || !y.size) return false;
+  let both = 0; x.forEach(w => { if (y.has(w)) both++; });
+  return both / Math.min(x.size, y.size) >= 0.6;
+}
+function ageNotebook(h, fresh) {
+  const old = h.notebook || [], ages = h.nbAges || [];
+  const retired = (h.retired || []).slice();
+  const keep = [], keepAges = [], keepKinds = [];
+  for (const raw of fresh) {
+    const n = typeof raw === 'string' ? raw : String((raw && raw.note) || '');
+    const kind = typeof raw === 'string' ? 'bit' : String((raw && raw.kind) || 'bit').toLowerCase();
+    if (!n) continue;
+    if (retired.some(r => sameNote(r, n))) continue;                 // a retired bit doesn't come back
+    const i = old.findIndex(o => sameNote(o, n));
+    // notes from before this update have no age yet; treat them as already a few shows old
+    const age = i >= 0 ? (h.nbAges ? (ages[i] || 0) : 3) + 1 : 0;
+    if (age >= NOTE_LIFE && kind !== 'taste') { retired.unshift(n); continue; }
+    keep.push(n); keepAges.push(age); keepKinds.push(kind);
+  }
+  h.notebook = keep.slice(0, 8); h.nbAges = keepAges.slice(0, 8); h.nbKinds = keepKinds.slice(0, 8); h.retired = retired.slice(0, 20);
+}
+
 const BANNED = ['buckle up', 'dive in', 'dive into', 'tapestry', 'journey', 'without further ado', 'folks', 'stay tuned', 'hidden gem', 'sonic', 'absolute banger', "let's get into it", 'you know what time it is', 'elevate', 'vibe check', 'ladies and gentlemen'];
 function hostSystem(h) {
   const st = S.settings;
@@ -1225,6 +1388,7 @@ function hostSystem(h) {
   return [
     `You are ${h.name}, one of the hosts on ${st.station} (${st.freq} FM), a personal radio station made for one listener named ${L()}. The station is live all day with different shows.`,
     `Who you are: ${h.personality}`,
+    ...(h.lately ? [`What you've been getting into lately, from doing the show: ${h.lately}`] : []),
     '',
     'The rest of the crew:',
     crew || '- Nobody else. You run the station solo.',
@@ -1241,6 +1405,7 @@ function hostSystem(h) {
     "- Write for the ear. Let reactions, short fragments and punctuation carry the feeling and the rhythm, the way people really talk on air.",
     voiceRule(),
     '- Any fact about a song or artist has to be true. If you are not sure, go for a joke or an opinion instead.',
+    '- Only the songs named in your instructions have played or are coming up. Never say any other song just played or is next, and never swap in a different title or artist for them.',
     `- Call ${L()} only by that name. Never compare ${L()} to other people and never tell ${L()} to hurry.`,
     `- Speak only as ${h.name}. Never write lines for the others and never put your name in front of your line.`,
     '',
@@ -1248,7 +1413,9 @@ function hostSystem(h) {
     'Bad: "What a beautiful song! Let\'s dive into the next track, folks!"',
     '',
     'Your notebook from past shows:',
-    nb
+    nb,
+    ...((h.retired || []).length ? ['', 'Old bits you already wore out, so never bring them back:', ...h.retired.slice(0, 12).map(n => `- ${n}`)] : []),
+    ...(overusedPhrases(h.id).length ? ['', `Phrases you've said way too much the last few days, so don't use them: ${overusedPhrases(h.id).map(x => `"${x}"`).join(', ')}`] : [])
   ].join('\n');
 }
 
@@ -1345,13 +1512,15 @@ async function updateNotebooks(session) {
       `Your stretch on ${session.name} just ended.`, '', 'What you said:', mine, '', 'Some of what the others said:', others || '- Nothing.', '',
       `The songs and how ${L()} reacted:`, reactions, '',
       'Your notebook right now:', (h.notebook || []).map(n => `- ${n}`).join('\n') || '- Empty.', '',
-      `Update your notebook so the next show feels like a continuation: running jokes, bits with the other hosts, your opinions, and what ${L()} loves or skips from your picks. Keep at most 8 notes, each under 15 words. Drop stale ones. Write in your own voice.`,
-      'Reply with only JSON: {"notebook": ["note", "note"]}'
+      ...((h.retired || []).length ? ['Bits you already retired, so leave them out:', ...h.retired.slice(0, 12).map(n => `- ${n}`), ''] : []),
+      `Update your notebook so the next show feels like a continuation: running jokes, bits with the other hosts, your opinions, and what ${L()} loves or skips from your picks. Keep at most 8 notes, each under 15 words. A running joke is good for two or three shows, then let it go and start something new. Drop stale ones. Write in your own voice.`,
+      `Mark each note: "bit" for a running joke or recurring gag, "opinion" for a take of yours, "taste" for what ${L()} loves or skips.`,
+      'Reply with only JSON: {"notebook": [{"note": "the note", "kind": "bit or opinion or taste"}]}'
     ].join('\n');
     try {
       const r = await callClaude({ system: `You are ${h.name}, a host on ${st.station}. Who you are: ${h.personality}`, user, maxTokens: 2500, model: h.model || HAIKU, effort: 'low' });
       const d = extractJSON(r.text);
-      if (Array.isArray(d.notebook)) h.notebook = d.notebook.map(cleanHost).filter(Boolean).slice(0, 8);
+      if (Array.isArray(d.notebook)) ageNotebook(h, d.notebook.map(x => typeof x === 'string' ? cleanHost(x) : { note: cleanHost(x && x.note || ''), kind: x && x.kind }).filter(x => typeof x === 'string' ? x : x.note).slice(0, 8));
       session.cost = (session.cost || 0) + r.cost;
     } catch (e) {}
   }));
@@ -1374,6 +1543,27 @@ function ytErr(status, data) {
 const BAD_WORDS = ['live', 'cover', 'reaction', 'karaoke', 'instrumental', '1 hour', 'loop', 'remix', 'acoustic', 'tutorial', 'lesson', 'mashup', 'type beat', 'review', 'piano', 'interview', 'highlights', 'trailer', 'podcast', 'behind the scenes'];
 // edits that change the song itself: these never win unless the song is actually called that
 const ALTERED = [/\bslow(ed)?\b/, /\breverb(ed)?\b/, /\bsp(e|ee)d\s*up\b/, /\bnightcore\b/, /\bdaycore\b/, /\b8d\b/, /\bbass\s*boost(ed)?\b/, /\bchopped\b/, /\bscrewed\b/, /\bpitched\b/, /\bunderwater\b/];
+/* Live recordings and instrumental versions. YouTube Music's auto-made uploads often carry the plain song
+   title, with only the album line in the description saying "(Live)" or "(Instrumentals)", so read that too. */
+const LIVE_RES = [/[([][^)\]]*\blive\b[^)\]]*[)\]]/, /\blive (at|from|in|on|session|sessions|performance|version|recording|acoustic|set)\b/, /\s[-–|:]\s*live\b/,
+  /\b(tiny desk|audiotree|a colors show|colors show|sofar sounds|live lounge|mtv unplugged|unplugged|vevo (dscvr|lift|ctrl)|in concert|concert|on stage|performance video|live performance)\b/];
+const INST_RES = [/\binstrumentals?\b/, /[([]\s*inst\.?\s*[)\]]/, /\bkaraoke\b/, /\boff vocal\b/, /\bbacking track\b/, /\bno vocals?\b/, /\bbeat only\b/, /\bacapella\b|\ba cappella\b/];
+// the "Title · Artist" line and the album line of an auto-made upload, or empty for anything else
+function autoLines(desc) {
+  const d = String(desc || '');
+  if (!/^\s*provided to youtube by/i.test(d)) return '';
+  const parts = d.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean);
+  return [parts[1] || '', parts[2] || ''].join('\n').toLowerCase();
+}
+// Which kind of version is this: 'live', 'instrumental' or ''. A song actually called "Live Another Day" doesn't count.
+function versionKind(v, artist, title) {
+  const s = String(title || '').toLowerCase(), a = String(artist || '').toLowerCase();
+  const hay = String(v.title || '').toLowerCase() + '\n' + autoLines(v.desc);
+  const hit = res => res.some(re => re.test(hay) && !re.test(s) && !re.test(a));
+  if (hit(INST_RES)) return 'instrumental';
+  if (hit(LIVE_RES)) return 'live';
+  return '';
+}
 const BAD_CATEGORY = { 17: 'sports', 25: 'news', 26: 'how-to', 27: 'education', 28: 'tech' };
 const preferExplicit = () => S.settings.preferExplicit !== false;
 /* Clean or explicit? YouTube doesn't say in anything an app can read, so this looks for how
@@ -1416,6 +1606,7 @@ function scoreVideo(v, artist, title) {
   else if (/visuali[sz]er/.test(t)) sc += 1;
   for (const b of BAD_WORDS) if (new RegExp('\\b' + b + '\\b').test(t) && !s.includes(b)) sc -= 5;
   for (const re of ALTERED) if (re.test(t) && !re.test(s)) sc -= 30;    // slowed, reverb, sped up and friends
+  if (versionKind(v, artist, title)) sc -= 30;                             // live recordings and instrumentals
   if (/\blyrics?\b/.test(t)) sc -= 1;
   if (!hasArtist(v, artist)) sc -= 30;                                    // a different artist's song with the same name
   if (v.category) { if (BAD_CATEGORY[v.category]) sc -= 30; else if (String(v.category) === '10') sc += 2; }
@@ -1475,7 +1666,7 @@ async function ytFetch(path, params, units) {
   return { out: true };
 }
 
-const CHECK_V = 2;   // bump to re-verify songs saved by older versions
+const CHECK_V = 3;   // bump to re-verify songs saved by older versions
 const inflight = new Map();
 async function findVideos(artist, title) {
   const k = norm(artist) + '|' + norm(title);
@@ -2034,7 +2225,7 @@ function dropUpcoming(t) {
 }
 function notePlayed(t) {
   const k = trackKey(t);
-  S.played = [{ k, artist: t.artist, title: t.title, at: Date.now() }, ...S.played.filter(p => p.k !== k)].slice(0, 300);
+  S.played = [{ k, artist: t.artist, title: t.title, at: Date.now() }, ...S.played.filter(p => p.k !== k)].slice(0, PLAYED_MAX);
 }
 
 /* sessions: one history entry per stretch of a show */
@@ -2090,6 +2281,21 @@ function maybeStartBriefing() {
     .finally(() => { Eng.briefP = null; });
 }
 /* new releases: looked up once a day, in the background */
+function maybeGrowHosts() {
+  if (Eng.growP || Eng.growTried === today()) return;
+  const due = activeHosts().filter(h => dueToGrow(h));
+  if (!due.length) return;
+  Eng.growTried = today();
+  Eng.growP = Promise.all(due.map(h => growHostTaste(h).catch(() => null)))
+    .then(done => {
+      done = done.filter(Boolean); if (!done.length) return;
+      save();
+      if (UI.view === 'settings') renderHostsEditor();
+      if (done.length === 1) toast(`${done[0].name}'s taste grew this week${done[0].latelyChange ? `: ${done[0].latelyChange.replace(/[.!]$/, '')}` : ''}. See Settings, Hosts.`, 7000);
+      else toast(`${listJoin(done.map(h => h.name))} grew their taste this week. See Settings, Hosts.`, 7000);
+    })
+    .finally(() => { Eng.growP = null; });
+}
 function maybeFindReleases() {
   if (!S.settings.releasesOn || Eng.relP || Eng.relTried === today()) return;
   if (S.releases && S.releases.date === today()) return;
@@ -2137,7 +2343,11 @@ function makeStream() {
   };
   return s;
 }
-function lastAired() { const s = Eng.session; return s && s.tracks.length ? s.tracks[s.tracks.length - 1] : null; }
+// the last song that really played, in the last 20 minutes: one that couldn't be found or wouldn't load doesn't count
+function lastAired() {
+  const t = Eng.lastTrack;
+  return t && t.status !== 'missing' && Date.now() - (t.playedAt || 0) < 20 * 60e3 ? t : null;
+}
 function breakCtx(extra = {}) {
   const when = new Date(Date.now() + (extra.etaMs || 0));
   const block = extra.block || Eng.block;
@@ -2269,16 +2479,29 @@ function startPrep(t, opts = {}) {
   let bind = null;
   const trackP = t ? Promise.resolve(t) : new Promise(r => { bind = r; });
   const stream = makeStream();
-  const prep = { track: t, kind, bind, stream, ctx, quick: !!opts.quick, forBlock: block.id, error: null, dead: false, cast: [] };
+  const prep = { track: t, kind, bind, stream, ctx, quick: !!opts.quick, forBlock: block.id, error: null, dead: false, cast: [], prevState: trackState(ctx.prev) };
   prep.promise = buildBreak(kind, trackP, ctx, stream, prep).catch(e => { prep.error = e; });
   if (Eng.prep && Eng.prep !== prep) Eng.prep.dead = true;
   Eng.prep = prep;
   return prep;
 }
 
+// Does the break still match what played? It was written while the last song was still going.
+function staleBreak(p) {
+  if (['segue', 'news', 'topic'].includes(p.kind)) return false;
+  const now = lastAired();
+  if ((p.ctx.prev || null) !== now) return true;
+  return !!now && p.prevState !== trackState(now);
+}
+const trackState = t => t ? `${t.verdict || ''}|${t.cut ? 1 : 0}` : '';
 async function takeBreak(t, my) {
   let p = Eng.prep;
   if (p && !p.track && p.bind) { p.track = t; p.bind(t); }
+  // a break written about a song that then got skipped, wouldn't play, or changed: write it again for what really happened
+  if (p && p.track === t && p.forBlock === Eng.block.id && p.ctx && staleBreak(p)) {
+    p.dead = true;
+    p = startPrep(t, { quick: true, kind: p.kind === 'banter' ? 'intro' : p.kind, from: p.ctx.fromBlock });
+  }
   if (!p || p.track !== t || p.forBlock !== Eng.block.id) p = startPrep(t, { quick: true });
   const ready = () => p.stream.lines.length > 0 || p.stream.done;
   if (!ready()) {
@@ -2300,7 +2523,7 @@ async function takeBreak(t, my) {
 function consumeBreak(b) {
   if (['open', 'welcome', 'handoff'].includes(b.kind)) Eng.needOpen = null;
   if (b.kind === 'news' && S.briefing) { S.briefing.aired = true; save(); }
-  if (b.kind === 'topic') Eng.topic = '';
+  if (b.kind === 'topic') { logTopic(Eng.topic); Eng.topic = ''; }
   Eng.lastKind = b.kind;
   Eng.caption = [];
   Eng.cast = b.cast && b.cast.length ? b.cast : blockHosts(Eng.block);
@@ -2372,6 +2595,7 @@ async function playTrack(t, overLines, my) {
     break;
   }
   if (t.status === 'playing') { t.status = 'missing'; toast(`${t.title} wouldn't play here, so it got skipped.`); }
+  if (t.status !== 'missing') Eng.lastTrack = t;
   Eng.cur = null; save(); renderAll();
 }
 
@@ -2473,7 +2697,7 @@ function tuneIn() {
   const blk = blockAt(new Date(Date.now() + 90e3));
   if (Eng.block && blk && Eng.block.id === blk.id) Eng.needOpen = Eng.needOpen || { kind: 'welcome' };
   else { Eng.block = null; Eng.prep = null; }
-  maybeStartBriefing(); maybeFindReleases();
+  maybeStartBriefing(); maybeFindReleases(); setTimeout(maybeGrowHosts, 20000);
   setOnAir(true); keepAwake(true);
   const my = Eng.token + 1;
   Eng.introP = (async () => {
@@ -2524,6 +2748,8 @@ function skip() {
 const WRONG = {
   censored: { extra: 'explicit', look: 'Got it. Looking for the explicit version.', none: "Couldn't find an uncensored version of this one, so it's skipping it." },
   altered: { extra: 'official audio', look: 'Got it. Looking for the original version.', none: "Couldn't find the original version of this one, so it's skipping it." },
+  live: { extra: 'official audio', drop: 'live', look: 'Got it. Looking for the studio version.', none: "Couldn't find the studio version of this one, so it's skipping it." },
+  instrumental: { extra: 'official audio', drop: 'instrumental', look: 'Got it. Looking for the version with vocals.', none: "Couldn't find the version with vocals, so it's skipping it." },
   song: { extra: '', look: 'Got it. Looking for the right song.', none: "Couldn't find this song on YouTube, so it's skipping it." }
 };
 async function reportWrong(kind) {
@@ -2540,6 +2766,12 @@ async function reportWrong(kind) {
   let alts = t.videoIds.slice(vi + 1).filter(id => !isCensored(id));
   Eng.swapping = true; renderLive();
   try {
+    // live or instrumental: the next saved upload may be the same kind, so read them and keep only the right ones
+    if (w.drop && alts.length) {
+      const det = await videoDetails(alts);
+      if (det) alts = alts.filter(id => det[id] && versionKind(det[id], t.artist, t.title) !== w.drop);
+      if (Eng.cur !== t || Vid.pending !== pv) return;
+    }
     if (!alts.length) {
       if (ytOut()) { toast(`That upload won't play again. Today's YouTube lookups are used up, so there's nothing else to switch to. Skipping it.`); skip(); return; }
       toast(w.look);
@@ -2550,8 +2782,8 @@ async function reportWrong(kind) {
     if (!alts.length) { toast(`${w.none} That upload won't play again.`); skip(); return; }
     const tm = vidTimes();
     t.videoIds = [...t.videoIds.slice(0, vi + 1), ...alts];
-    // a wrong song starts over; a censored or slowed one picks up at the same spot
-    t.swapAt = kind !== 'song' && tm && tm.c > 3 && tm.left > 15 ? Math.max(0, tm.c - 1) : 0;
+    // a wrong song or a live one starts over; a censored, slowed or instrumental one picks up at the same spot
+    t.swapAt = kind !== 'song' && kind !== 'live' && tm && tm.c > 3 && tm.left > 15 ? Math.max(0, tm.c - 1) : 0;
     stopVoice(); Eng.cutTalk = true;
     pv.fading = true;
     await fadeTo(0, 350);
@@ -2869,7 +3101,7 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'growArtists', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'growArtists', 'hostsGrow', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
 const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
@@ -2902,6 +3134,7 @@ function onSettingInput(e) {
   if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') { Voice.naturalBroken = null; Voice.expressiveBroken = null; }
   if (f === 'voiceMode') applyVoiceClass();
   if (f === 'artists') renderGrown();
+  if (f === 'hostsGrow') renderHostsEditor();
   if (f === 'growArtists' && v) growArtists();
   saveSoon(); renderHeader();
   if (KEY_FIELDS.includes(f) || f === 'briefingOn' || f === 'listener') renderAir();
@@ -2915,6 +3148,12 @@ function hostMeta(h) {
   else bits.push(shows.length ? `${shows.length} show${shows.length > 1 ? 's' : ''}` : 'no shows');
   if (S.settings.newsHost === h.id) bits.push('news');
   return bits.join(' · ');
+}
+function latelyNote(h) {
+  if (S.settings.hostsGrow === false) return 'Taste updates are off in Settings, Hosts.';
+  if (!h.latelyAt || !h.lately) return `Updates by itself once a week from ${h.name}'s picks and how you reacted to them.`;
+  const when = new Date(h.latelyAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `Updated ${when}${h.latelyChange ? `: ${h.latelyChange.replace(/[.!]$/, '')}` : ''}. It updates once a week, and you can edit it.`;
 }
 function renderHostsEditor() {
   const ed = $('#hostsEd'); if (!ed) return;
@@ -2934,6 +3173,7 @@ function renderHostsEditor() {
           <label class="f" for="${p}model">Model<select id="${p}model" data-hf="model">${modelOpts}</select></label>
         </div>
         <label class="f" for="${p}personality">Personality and music lane<textarea id="${p}personality" data-hf="personality">${esc(h.personality)}</textarea></label>
+        <label class="f" for="${p}lately">Lately into<textarea id="${p}lately" data-hf="lately" placeholder="Fills in by itself after a week of shows.">${esc(h.lately || '')}</textarea><small>${esc(latelyNote(h))}</small></label>
         <label class="f only-natural" for="${p}gvoice">Voice<select id="${p}gvoice" data-hf="gvoice">${gOpts}</select></label>
         <label class="f only-expressive" for="${p}delivery">How they sound<textarea id="${p}delivery" data-hf="delivery" placeholder="Like: hype DJ energy, loud and quick, laughs a lot">${esc(h.delivery || '')}</textarea><small>A style direction for the expressive voices.</small></label>
         <label class="f only-natural" for="${p}grate">Speed <span class="muted" data-out="grate">${fmtX(h.grate)}</span><input type="range" id="${p}grate" data-hf="grate" min="0.85" max="1.2" step="0.01" value="${Number(h.grate) || 1}"></label>
@@ -2948,6 +3188,7 @@ function renderHostsEditor() {
         <div class="btnrow">
           <button type="button" class="btn small" data-hact="hear">Hear ${esc(h.name)}</button>
           <button type="button" class="btn small ghost" data-hact="clearnb" id="${p}clearnb">Clear notebook</button>
+          ${h.lately ? `<button type="button" class="btn small ghost" data-hact="undolately" id="${p}undolately">Undo taste update</button>` : ''}
           <button type="button" class="btn small ghost" data-hact="remove" id="${p}remove">Remove</button>
         </div>
       </div>
@@ -3090,6 +3331,8 @@ function syncPayload(withTaste) {
   const st = clone(S.settings), out = {};
   Object.keys(st).forEach(k => { if (k !== 'hosts' && k !== 'schedule' && !sameJSON(st[k], DEFAULT_SETTINGS[k])) out[k] = st[k]; });
   out.hosts = packList(st.hosts, DEFAULT_HOSTS);
+  // keep the link short: undo history stays on this device, and only the newest retired bits go along
+  out.hosts.forEach(h => { delete h.latelyLog; delete h.nbAges; delete h.nbKinds; if (h.retired) h.retired = h.retired.slice(0, 10); });
   out.schedule = packList(st.schedule, DEFAULT_SCHEDULE);
   const d = { v: 2, settings: out };
   if (withTaste) {
@@ -3142,7 +3385,7 @@ function applySync(d) {
   if (pl) {
     const m = new Map();
     [...pl.map(p => ({ ...p, k: trackKey(p) })), ...S.played].forEach(p => { const o = m.get(p.k); if (!o || (p.at || 0) > (o.at || 0)) m.set(p.k, p); });
-    S.played = [...m.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 300);
+    S.played = [...m.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, PLAYED_MAX);
   }
   Eng.block = null; Eng.session = null; Eng.upcoming = []; S.queue = null;
   Voice.naturalBroken = null;
@@ -3188,7 +3431,7 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.6', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.7', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
     preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
@@ -3305,7 +3548,10 @@ $('#hostsEd').addEventListener('click', e => {
   if (b.dataset.hact === 'hear') previewHost(h);
   else if (b.dataset.hact === 'clearnb') {
     if (!armed(b.id, 'Tap again to clear')) return;
-    h.notebook = []; save(); renderHostsEditor(); toast(`${h.name}'s notebook is cleared.`);
+    h.notebook = []; h.nbAges = []; h.nbKinds = []; h.retired = []; save(); renderHostsEditor(); toast(`${h.name}'s notebook is cleared.`);
+  } else if (b.dataset.hact === 'undolately') {
+    if (!armed(b.id, 'Tap again to undo')) return;
+    undoHostTaste(h); save(); renderHostsEditor(); toast(`${h.name}'s taste is back to the last version.`);
   } else if (b.dataset.hact === 'remove') {
     if (hosts().length <= 1 || (h.enabled && activeHosts().length <= 1)) { toast('Keep at least one host on the roster.'); return; }
     if (!armed(b.id, `Tap again to remove ${h.name}`)) return;
@@ -3405,7 +3651,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid, growArtists, artistsToAdd, setVerdict };
+window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid, growArtists, artistsToAdd, setVerdict, versionKind, staleBreak, lastAired, trackState, ageNotebook, overusedPhrases, logTopic, recentTopics, playedByArtist, tooSoon, growHostTaste, dueToGrow, undoHostTaste, maybeGrowHosts, hostSystem, renderHostsEditor };
 })();
 
 </script>
