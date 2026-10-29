@@ -419,6 +419,10 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
         <label class="f only-natural" for="s-ttsKey">Google voice key (optional)
           <span class="keyrow"><input type="password" id="s-ttsKey" placeholder="Leave empty to use your YouTube key" spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-ttsKey">Show</button></span>
         </label>
+        <label class="f only-expressive" for="s-geminiKey">Gemini API key (for expressive voices)
+          <span class="keyrow"><input type="password" id="s-geminiKey" placeholder="From aistudio.google.com" spellcheck="false" autocapitalize="off"><button type="button" class="btn small" data-reveal="s-geminiKey">Show</button></span>
+          <small>Go to aistudio.google.com, sign in, tap Get API key, then Create API key, and paste it here. No Google Cloud setup needed.</small>
+        </label>
         <div class="btnrow"><button type="button" class="btn small" id="testBtn">Test keys</button></div>
         <div class="testout" id="testOut" aria-live="polite"></div>
       </fieldset>
@@ -480,7 +484,7 @@ body.has-mini .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 140px)}
             <option value="off">No voices, captions only</option>
           </select>
           <small class="only-natural only-plain-natural">Natural voices need the Cloud Text-to-Speech API turned on. If they stop working, the station switches to phone voices on its own.</small>
-          <small class="only-expressive">Google's newer Gemini voices: the same voice names, but each host gets a style (set it under Hosts) and they can laugh, sigh and take pauses. Same key and same API. There's no free tier, so Google bills these from the first line, roughly 5 to 10 cents per hour of listening. The On air page shows what they cost each day. If they stop working, the station falls back to the regular natural voices.</small>
+          <small class="only-expressive">Google's Gemini voices: the same voice names, but each host gets a style (set it under Hosts) and they can laugh, sigh and take pauses. They need a Gemini API key from Google AI Studio (see Keys). AI Studio has a free tier with daily limits; past that, roughly 80 cents per hour of talking, and the hosts talk far less than an hour per hour. The On air page shows an estimate at the paid rate. If they stop working or hit the limit, the station falls back to the regular natural voices.</small>
           <small class="only-phone">These come from your phone's text to speech. Pick a different voice, pitch and speed for each host.</small>
         </label>
       </fieldset>
@@ -640,9 +644,9 @@ const DEFAULT_DELIVERY = {
   milo: 'Excited nerd energy. Quick and animated, and his voice climbs when he gets going on a tangent.',
   nova: 'Soulful and a little dramatic, like reading poetry at a jazz bar. Slower, smoky and expressive.'
 };
-// Gemini voices on Google Cloud Text-to-Speech: same 30 voice names, plus a style prompt
-const GEM_MODEL = 'gemini-2.5-flash-tts';
-const GEM_PRICE = { textPerM: 0.50, audioPerM: 10, audioTokPerSec: 25 };
+// Expressive voices: Google's Gemini API (a key from Google AI Studio), same 30 voice names, plus a short style
+const GEM_MODELS = ['gemini-3.8-flash-tts', 'gemini-3.8-flash-lite-tts', 'gemini-3.1-flash-tts-preview'];
+const GEM_PRICE = { textPerM: 0.50, audioPerM: 9, audioTokPerSec: 25 };   // paid-tier rates; AI Studio's free tier costs nothing
 
 const DEFAULT_HOSTS = [
   { id: 'jules', name: 'Jules', color: HOST_COLORS[0], model: HAIKU, enabled: true, gvoice: 'Algieba', grate: 1, voiceName: '', pitch: 1, rate: 1, notebook: [],
@@ -669,7 +673,7 @@ const DEFAULT_SCHEDULE = [
 ];
 const TALK_LEVELS = [['chatty', 'Lots of talk'], ['balanced', 'Some talk'], ['light', 'Mostly music']];
 const DEFAULT_SETTINGS = {
-  claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '',
+  claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '', geminiKey: '',
   listener: 'Lune', station: 'Lune FM', freq: '88.7',
   artists: 'Brent Faiyaz, Lucky Daye, dvsn, GIVĒON, Ovi Wood, Odeal, Isaiah Falls, Olivia Dean, Mac Miller, Kendrick Lamar, 6LACK, Isaiah Rashad, Robert Glasper',
   tasteNotes: 'R&B at the core with a deep hip-hop foundation. Loves the most melodic, atmospheric cuts in any catalog, and songs where two voices share the same intimate register. Strong Nigerian and diaspora thread. Into jazz and vinyl culture. Likes finding artists before they blow up.',
@@ -1299,7 +1303,7 @@ async function genReleases() {
 // what the hosts may put in brackets depends on which voices read their lines
 function voiceRule() {
   const m = S.settings.voiceMode || 'natural';
-  if (m === 'expressive') return '- An expressive voice engine reads your line out loud. You can put delivery tags in square brackets right where they happen, at most two per line, and only these: [laughing] [sigh] [uhm] [short pause] [long pause] [whispering] [sarcasm] [shouting]. Like: "Nah [laughing] he really flipped that sample on a drill beat." Use them when they fit, not on every line. No other brackets, no emojis, markdown or em dashes.';
+  if (m === 'expressive') return '- An expressive voice engine reads your line out loud. You can put delivery tags in square brackets right where they happen, at most two per line, and only these: [laughing] [chuckle] [sigh] [gasp] [uhm] [short pause] [long pause] [whispering] [shouting]. Like: "Nah [laughing] he really flipped that sample on a drill beat." Use them when they fit, not on every line. No other brackets, no emojis, markdown or em dashes.';
   if (m === 'natural') return '- A voice engine reads your line out loud. Where you would really take a beat, like before a punchline, you can write [short pause] or [long pause], at most one per line. No other brackets, no emojis, markdown or em dashes.';
   return '- A speech engine reads your line out loud. No emojis, stage directions, sound effects in brackets, markdown or em dashes.';
 }
@@ -1437,6 +1441,7 @@ function turnPrompt(h, job) {
     const re = reactionText(ctx.prev);
     out.push(`The song that just played: ${ctx.prev.title} by ${ctx.prev.artist}, ${hostName(ctx.prev.pickedBy)}'s pick.${re ? ` ${re}.` : ''}`);
   }
+  if (ctx.failed && turn === 0) out.push(`Heads up: ${ctx.failed.title} by ${ctx.failed.artist}, the song that was introduced last, wouldn't load, so it got skipped and never played. Don't talk about it as if it played. You can own it in a few words, like a real DJ would.`);
   const final = turn === total - 1;
   const others = job.cast.filter(id => id !== h.id).map(hostName);
   if (kind === 'open') {
@@ -1547,6 +1552,9 @@ const ALTERED = [/\bslow(ed)?\b/, /\breverb(ed)?\b/, /\bsp(e|ee)d\s*up\b/, /\bni
    title, with only the album line in the description saying "(Live)" or "(Instrumentals)", so read that too. */
 const LIVE_RES = [/[([][^)\]]*\blive\b[^)\]]*[)\]]/, /\blive (at|from|in|on|session|sessions|performance|version|recording|acoustic|set)\b/, /\s[-–|:]\s*live\b/,
   /\b(tiny desk|audiotree|a colors show|colors show|sofar sounds|live lounge|mtv unplugged|unplugged|vevo (dscvr|lift|ctrl)|in concert|concert|on stage|performance video|live performance)\b/];
+// beat uploads: "Westside Gun x Conway Type Beat", "[FREE] boom bap beat", producer channels
+const BEAT_RES = [/\btype\s*beat\b/, /\bbeats?\b/, /[([]\s*free\s*[)\]]/, /\bfree for profit\b/, /\bfor profit\b/, /\bboom ?bap instrumental\b/, /\bprod\.? by .* x /];
+const BEAT_CHANNEL = /beats?\b|instrumentals?\b|\bprod\b|producer|type ?beat/i;
 const INST_RES = [/\binstrumentals?\b/, /[([]\s*inst\.?\s*[)\]]/, /\bkaraoke\b/, /\boff vocal\b/, /\bbacking track\b/, /\bno vocals?\b/, /\bbeat only\b/, /\bacapella\b|\ba cappella\b/];
 // the "Title · Artist" line and the album line of an auto-made upload, or empty for anything else
 function autoLines(desc) {
@@ -1560,7 +1568,9 @@ function versionKind(v, artist, title) {
   const s = String(title || '').toLowerCase(), a = String(artist || '').toLowerCase();
   const hay = String(v.title || '').toLowerCase() + '\n' + autoLines(v.desc);
   const hit = res => res.some(re => re.test(hay) && !re.test(s) && !re.test(a));
-  if (hit(INST_RES)) return 'instrumental';
+  if (hit(INST_RES) || hit(BEAT_RES)) return 'instrumental';
+  // a beat-maker's channel, unless the channel is the artist's own
+  if (BEAT_CHANNEL.test(v.channel || '') && !BEAT_CHANNEL.test(s) && !norm(v.channel || '').includes(mainArtist(artist))) return 'instrumental';
   if (hit(LIVE_RES)) return 'live';
   return '';
 }
@@ -1617,6 +1627,7 @@ function scoreVideo(v, artist, title) {
     else if (ht.explicit || hd.explicit) sc += 4;
   }
   if (S.censored && S.censored[v.id]) sc -= 60;
+  if (v.blocked) sc -= 60;                                                // can't play in this player: age-restricted, embedding off, or region-locked
   return sc;
 }
 const isCensored = id => !!(S.censored && S.censored[id]);
@@ -1666,7 +1677,7 @@ async function ytFetch(path, params, units) {
   return { out: true };
 }
 
-const CHECK_V = 3;   // bump to re-verify songs saved by older versions
+const CHECK_V = 4;   // bump to re-verify songs saved by older versions
 const inflight = new Map();
 async function findVideos(artist, title) {
   const k = norm(artist) + '|' + norm(title);
@@ -1681,16 +1692,28 @@ async function findVideos(artist, title) {
   inflight.set(k, p);
   try { return await p; } finally { inflight.delete(k); }
 }
+// Videos that can't play in an embedded player here: age-restricted ones (explicit versions often are),
+// ones with embedding turned off, and ones blocked in this country.
+const myCountry = () => { const m = String(navigator.language || '').match(/[-_]([A-Za-z]{2})(?![A-Za-z])/); return m ? m[1].toUpperCase() : 'US'; };
+function blockedHere(it) {
+  const cd = it.contentDetails || {}, st = it.status || {}, rr = cd.regionRestriction || {};
+  if (cd.contentRating && cd.contentRating.ytRating === 'ytAgeRestricted') return 'age';
+  if (st.embeddable === false) return 'embed';
+  if (st.privacyStatus && st.privacyStatus !== 'public' && st.privacyStatus !== 'unlisted') return 'private';
+  const c = myCountry();
+  if ((Array.isArray(rr.blocked) && rr.blocked.includes(c)) || (Array.isArray(rr.allowed) && !rr.allowed.includes(c))) return 'region';
+  return '';
+}
 // Full details for up to 50 videos: description, category and length. Costs 1 unit, where a search costs 100.
 async function videoDetails(ids) {
   if (!ids.length) return {};
   try {
-    const r = await ytFetch('videos', { part: 'snippet,contentDetails', id: ids.slice(0, 50).join(',') }, 1);
+    const r = await ytFetch('videos', { part: 'snippet,contentDetails,status', id: ids.slice(0, 50).join(',') }, 1);
     if (!r.data) return null;
     const out = {};
     (r.data.items || []).forEach(it => {
       if (!it || !it.id || !it.snippet) return;
-      out[it.id] = { id: it.id, title: it.snippet.title || '', channel: it.snippet.channelTitle || '', desc: it.snippet.description || '', category: it.snippet.categoryId || '', secs: isoSecs(it.contentDetails && it.contentDetails.duration) };
+      out[it.id] = { id: it.id, title: it.snippet.title || '', channel: it.snippet.channelTitle || '', desc: it.snippet.description || '', category: it.snippet.categoryId || '', secs: isoSecs(it.contentDetails && it.contentDetails.duration), blocked: blockedHere(it) };
     });
     return out;
   } catch (e) { return null; }
@@ -1783,14 +1806,34 @@ function onYTState(e) {
   const st = e.data, p = Vid.pending;
   if (!p) return;
   if (st === 1) {
-    $('#tapHint').hidden = true; p.markStarted();
+    $('#tapHint').hidden = true; if (!p.didPlay) { p.didPlay = true; p.playedAt = Date.now(); } p.markStarted();
     if (Eng.paused) { Eng.paused = false; setOnAir(true); keepAwake(true); renderAll(); } // tapped play on the video itself
   } else if (st === 2) {
     // paused from the video's own controls
     if (!Eng.paused && !p.fading && Date.now() - p.loadedAt > 1500) { Eng.paused = true; Eng.pausedAt = Date.now(); stopVoice(); Eng.cutTalk = true; setOnAir(false); renderAll(); }
   } else if (st === 0) p.finish('ended');
 }
-function onYTError() { if (Vid.pending) Vid.pending.finish('error'); }
+function onYTError(e) { if (Vid.pending) { Vid.pending.code = e && e.data; Vid.pending.finish('error'); } }
+// a short log of what really happened with each upload, for the problem report
+const YT_CODES = { 2: 'bad video id', 5: "the player couldn't play it", 100: 'removed or private', 101: 'owner blocks embedding', 150: 'owner blocks embedding or age-restricted' };
+function logPlay(t, p, result) {
+  let vd = {}; try { vd = (player && player.getVideoData && player.getVideoData()) || {}; } catch (e) {}
+  S.playLog = [{ at: new Date().toISOString(), song: `${t.artist} - ${t.title}`, id: p.id, result: p.code ? `${result} (${YT_CODES[p.code] || 'error ' + p.code})` : result,
+    started: p.didPlay ? Math.round(p.playedAt - p.loadedAt) / 1000 + 's' : 'never', video: vd.title ? `${vd.title} | ${vd.author || ''}` : '' }, ...(S.playLog || [])].slice(0, 25);
+  saveSoon();
+}
+// Once a video starts, make sure it's the song: right artist or right title, and not a beat, live or instrumental upload.
+function playingLooksWrong(t) {
+  let vd = null; try { vd = player && player.getVideoData && player.getVideoData(); } catch (e) {}
+  if (!vd || !vd.title) return '';
+  const v = { title: vd.title, channel: vd.author || '', desc: '' };
+  const s = norm(String(t.title).replace(/\s*[\(\[](feat|ft|with)[^\)\]]*[\)\]]/i, '')), tt = norm(vd.title);
+  const w = s.split(' ').filter(x => x.length > 2);
+  const titleOk = !s || tt.includes(s) || (w.length && w.filter(x => tt.includes(x)).length / w.length >= 0.6);
+  if (!titleOk && !hasArtist(v, t.artist)) return 'different song';
+  const k = versionKind(v, t.artist, t.title);
+  return k ? k : '';
+}
 function setVol(v) { Vid.vol = Math.max(0, Math.min(100, Math.round(v))); try { player && player.setVolume(Vid.vol); } catch (e) {} }
 // Fades go by the clock, not by counting ticks: with the screen locked the browser may
 // only run timers once a second, and a fade should still finish on time.
@@ -1813,7 +1856,7 @@ function playVideo(id, startVol, startSeconds = 0) {
   const started = new Promise(r => resolveStarted = r);
   const p = {
     id, done, started, fading: false, isStarted: false, loadedAt: Date.now(),
-    markStarted() { if (!p.isStarted) { p.isStarted = true; resolveStarted(true); } },
+    markStarted() { if (!p.isStarted) { p.isStarted = true; p.startedAt = Date.now(); resolveStarted(true); } },
     finish(r) { if (Vid.pending === p) Vid.pending = null; clearTimeout(p.watch); p.markStarted(); resolveDone(r); }
   };
   Vid.pending = p;
@@ -1841,9 +1884,9 @@ const gvoiceOf = h => (h && h.gvoice) || 'Charon';
 
 /* Delivery tags. Hosts can write [laughing], [short pause] and so on into a line.
    Each voice engine gets only the tags it understands, and the screen never shows them. */
-const TAG_LIST = ['laughing', 'sigh', 'uhm', 'short pause', 'medium pause', 'long pause', 'whispering', 'sarcasm', 'shouting'];
+const TAG_LIST = ['laughing', 'chuckle', 'sigh', 'gasp', 'uhm', 'short pause', 'medium pause', 'long pause', 'whispering', 'sarcasm', 'shouting'];
 const TAG_ALIAS = {
-  laugh: 'laughing', laughs: 'laughing', laughter: 'laughing', chuckle: 'laughing', chuckles: 'laughing', chuckling: 'laughing',
+  laugh: 'laughing', laughs: 'laughing', laughter: 'laughing', chuckles: 'chuckle', chuckling: 'chuckle', giggle: 'chuckle', giggles: 'chuckle', gasps: 'gasp',
   sighs: 'sigh', sighing: 'sigh', um: 'uhm', umm: 'uhm', uh: 'uhm', pause: 'short pause', beat: 'short pause',
   'pause short': 'short pause', 'pause long': 'long pause', whisper: 'whispering', whispers: 'whispering',
   shout: 'shouting', shouts: 'shouting', sarcastic: 'sarcasm', sarcastically: 'sarcasm'
@@ -1913,7 +1956,10 @@ async function ttsPost(body) {
 async function makeClip(b64) {
   const bin = atob(b64), bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const clip = { url: URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' })), buffer: null, secs: 0 };
+  return makeClipBytes(bytes, 'audio/mpeg');
+}
+async function makeClipBytes(bytes, type) {
+  const clip = { url: URL.createObjectURL(new Blob([bytes], { type })), buffer: null, secs: 0 };
   if (actx) { try { clip.buffer = await actx.decodeAudioData(bytes.buffer.slice(0)); clip.secs = clip.buffer.duration; } catch (e) {} }
   return clip;
 }
@@ -1923,30 +1969,94 @@ function cacheClip(ck, clip) {
   return clip;
 }
 
-// Expressive voices: Google's Gemini voices, same 30 names, steered by a short style direction
-function gemPrompt(h, mood) {
+/* Expressive voices through the Gemini API. The text is read word for word; sounds and pauses go inline
+   in angle brackets (<laugh>, <short pause>), and how the host sounds goes in a short style note. */
+const GEM_TAG = { laughing: '<laugh>', chuckle: '<chuckle>', sigh: '<sigh>', gasp: '<gasp>', uhm: 'uhm,', 'short pause': '<short pause>', 'medium pause': '<short pause>',
+  'long pause': '<long pause>', whispering: '<whispering>', shouting: '<shout>', sarcasm: '' };
+const gemText = s => tidy(keepTags(s).replace(/\[([^\]]*)\]/g, (m, x) => ` ${GEM_TAG[normTagName(x)] || ''} `));
+// keep it short: long style notes make the voice drift
+function gemStyle(h) {
   const d = String((h && h.delivery) || '').trim() || firstSentence(h && h.personality) || 'Friendly and natural.';
+  const two = (d.match(/[^.!?]+[.!?]?/g) || [d]).slice(0, 2).map(x => x.trim()).join(' ').slice(0, 170);
   const rate = Number(h && h.grate) || 1;
-  const pace = rate >= 1.04 ? ' Talk a little quicker than usual.' : rate <= 0.96 ? ' Take your time, a little slower than usual.' : '';
-  return [
-    `You are ${h ? h.name : 'a host'}, a host on a live radio station, talking on air between songs.`,
-    'Say the line the way a real radio host would: loose, conversational and expressive, with real reactions. Never like an audiobook or an announcer reading a script.',
-    `How you sound: ${d}${pace}`,
-    mood ? `The show right now: ${mood}` : ''
-  ].filter(Boolean).join(' ');
+  const pace = rate >= 1.04 ? ' A little quick.' : rate <= 0.96 ? ' Unhurried.' : '';
+  return `Loose, conversational radio host, not an announcer. ${two}${pace}`;
 }
-async function synthGemini(text, h, mood) {
-  const prompt = gemPrompt(h, mood), t = keepTags(text);
-  if (!stripTags(t)) throw new UserError('Nothing to say.');
-  const ck = `g|${gvoiceOf(h)}|${prompt}|${t}`;
+const gemKey = () => String(S.settings.geminiKey || '').trim();
+// the audio sits at steps[].content[] where type is "audio"; walk the reply so small shape changes don't break it
+function findAudio(o, out = []) {
+  if (!o || typeof o !== 'object') return out;
+  if (Array.isArray(o)) { o.forEach(x => findAudio(x, out)); return out; }
+  if (o.type === 'audio' && typeof o.data === 'string') out.push(o);
+  else if (o.inlineData && typeof o.inlineData.data === 'string') out.push({ data: o.inlineData.data, mime_type: o.inlineData.mimeType });
+  for (const k of Object.keys(o)) if (k !== 'data' && o[k] && typeof o[k] === 'object') findAudio(o[k], out);
+  return out;
+}
+// raw 16-bit audio with no header gets a WAV header so the phone can play it
+function pcmToWav(bytes, rate = 24000) {
+  const h = new ArrayBuffer(44), v = new DataView(h), w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + bytes.length, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, bytes.length, true);
+  const out = new Uint8Array(44 + bytes.length); out.set(new Uint8Array(h), 0); out.set(bytes, 44);
+  return out;
+}
+function gemErr(status, data) {
+  const e = (data && data.error) || {}, msg = String(e.message || ''), all = msg + JSON.stringify(e.details || '');
+  if (status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(all)) return { msg: "Gemini voices hit Google's limit for now.", wait: true };
+  if (/API key not valid|API_KEY_INVALID/i.test(all)) return { msg: 'Google rejected the Gemini key. Copy it again from Google AI Studio and paste it in Settings.', fatal: true };
+  if (/not found|is not supported|NOT_FOUND/i.test(all) || status === 404) return { msg: 'model', model: true };
+  if (/has not been used|is disabled|SERVICE_DISABLED/i.test(all)) return { msg: 'The Gemini API is turned off for that key. Make a fresh key in Google AI Studio.', fatal: true };
+  if (/location|region|not available in your country/i.test(all)) return { msg: "Gemini voices aren't available for this account's region.", fatal: true };
+  if (/billing/i.test(all)) return { msg: 'Gemini voices need billing turned on for that key in Google AI Studio.', fatal: true };
+  if (status === 401 || status === 403) return { msg: 'Expressive voices failed: Google refused the Gemini key' + (msg ? ` (${msg})` : '.'), fatal: true };
+  return { msg: 'Expressive voices failed' + (msg ? ': ' + msg : '.'), fatal: status === 400 };
+}
+async function synthGemini(text, h) {
+  const key = gemKey();
+  if (!key) throw new UserError('Expressive voices need a Gemini API key. Get one free at aistudio.google.com and paste it in Settings, Keys.', { fatal: true });
+  const t = gemText(text), style = gemStyle(h);
+  if (!stripTags(t.replace(/<[^>]*>/g, ' '))) throw new UserError('Nothing to say.');
+  const ck = `g|${gvoiceOf(h)}|${style}|${t}`;
   if (ttsCache.has(ck)) return ttsCache.get(ck);
-  const { res, data } = await ttsPost({ input: { prompt, text: t }, voice: { languageCode: 'en-US', name: gvoiceOf(h), modelName: GEM_MODEL }, audioConfig: { audioEncoding: 'MP3' } });
-  if (!res.ok) throw new UserError(ttsErr(res.status, data, 'Expressive voices'), { fatal: [400, 403, 404].includes(res.status) });
-  if (!data || !data.audioContent) throw new UserError('Expressive voices sent back nothing.');
-  const clip = await makeClip(data.audioContent);
-  const secs = clip.secs || words(stripTags(t)) / 2.6;
-  addSpend(secs * GEM_PRICE.audioTokPerSec * GEM_PRICE.audioPerM / 1e6 + (prompt.length + t.length) / 4 * GEM_PRICE.textPerM / 1e6, 'voice');
-  return cacheClip(ck, clip);
+  const models = Voice.gemModel ? [Voice.gemModel] : GEM_MODELS;
+  for (const model of models) {
+    let res, data;
+    try {
+      res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          model,
+          input: [{ type: 'user_input', content: [{ type: 'text', text: t, annotations: [{ type: 'speech_metadata', style }] }] }],
+          response_format: { type: 'audio' },
+          generation_config: { speech_config: [{ voice: gvoiceOf(h) }] }
+        })
+      });
+    } catch (e) {
+      Voice.gemNetFails = (Voice.gemNetFails || 0) + 1;
+      throw new UserError("Couldn't reach Google's Gemini voices.", { fatal: Voice.gemNetFails >= 3 });
+    }
+    Voice.gemNetFails = 0;
+    data = await res.json().catch(() => null);
+    if (!res.ok) {
+      const e = gemErr(res.status, data);
+      if (e.model) continue;                                         // that model isn't offered: try the next one
+      throw new UserError(e.msg, { fatal: !!e.fatal, code: e.wait ? 'wait' : '' });
+    }
+    const found = findAudio(data);
+    const a = found[found.length - 1];
+    if (!a) throw new UserError('Expressive voices sent back no audio.');
+    Voice.gemModel = model;
+    const bin = atob(a.data); let bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const isWav = bytes.length > 12 && String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF';
+    if (!isWav) bytes = pcmToWav(bytes, Number(a.sample_rate || a.sampleRate) || 24000);
+    const clip = await makeClipBytes(bytes, 'audio/wav');
+    const secs = clip.secs || bytes.length / 48000;
+    addSpend(secs * GEM_PRICE.audioTokPerSec * GEM_PRICE.audioPerM / 1e6 + (style.length + t.length) / 4 * GEM_PRICE.textPerM / 1e6, 'voice');
+    return cacheClip(ck, clip);
+  }
+  throw new UserError("Google doesn't offer the Gemini voice models to this key yet.", { fatal: true });
 }
 async function synthChirp(text, h) {
   const name = `en-US-Chirp3-HD-${gvoiceOf(h)}`, rate = Math.min(1.3, Math.max(0.8, Number(h && h.grate) || 1));
@@ -1962,12 +2072,17 @@ async function synthChirp(text, h) {
 }
 // opts.engine forces one engine (for Test keys); otherwise expressive falls back to natural
 async function synth(text, h, opts = {}) {
-  const engine = opts.engine || (voiceMode() === 'expressive' && !Voice.expressiveBroken ? 'gemini' : 'chirp');
+  const resting = Date.now() < (Voice.gemRestUntil || 0);
+  const engine = opts.engine || (voiceMode() === 'expressive' && !Voice.expressiveBroken && !resting ? 'gemini' : 'chirp');
   if (engine === 'gemini') {
-    try { return await synthGemini(text, h, opts.mood); }
+    try { return await synthGemini(text, h); }
     catch (e) {
       if (opts.engine) throw e;
       if (e.fatal) expressiveFailed(e);
+      else if (e.code === 'wait') {
+        Voice.gemRestUntil = Date.now() + 10 * 60e3;
+        toast(`${e.message} Using the regular natural voices for 10 minutes.`, 7000);
+      }
     }
   }
   return synthChirp(text, h);
@@ -2360,7 +2475,8 @@ function breakCtx(extra = {}) {
     recent: Eng.recent.slice(-6),
     topic: Eng.topic, briefing: b,
     newsHost: b && hostById(b.host) && hostById(b.host).enabled ? b.host : newsHost().id,
-    firstToday: !S.sessions.some(s => s.date === today() && s !== Eng.session && s.tracks.length)
+    firstToday: !S.sessions.some(s => s.date === today() && s !== Eng.session && s.tracks.length),
+    failed: Eng.failed && Date.now() - Eng.failed.at < 15 * 60e3 ? Eng.failed.t : null
   };
 }
 function weighted(pairs) { let r = Math.random() * pairs.reduce((a, p) => a + p[1], 0); for (const [k, w] of pairs) { r -= w; if (r <= 0) return k; } return pairs[0][0]; }
@@ -2524,6 +2640,7 @@ function consumeBreak(b) {
   if (['open', 'welcome', 'handoff'].includes(b.kind)) Eng.needOpen = null;
   if (b.kind === 'news' && S.briefing) { S.briefing.aired = true; save(); }
   if (b.kind === 'topic') { logTopic(Eng.topic); Eng.topic = ''; }
+  if (b.ctx && b.ctx.failed && Eng.failed && Eng.failed.t === b.ctx.failed) Eng.failed = null;
   Eng.lastKind = b.kind;
   Eng.caption = [];
   Eng.cast = b.cast && b.cast.length ? b.cast : blockHosts(Eng.block);
@@ -2585,16 +2702,28 @@ async function playTrack(t, overLines, my) {
       }
     }
     if (!live(my)) return;
+    // once it starts, check it's really this song; if not, never play that upload again and try the next one
+    pv.started.then(() => {
+      if (Vid.pending !== pv || !pv.isStarted) return;
+      const bad = playingLooksWrong(t);
+      if (!bad) return;
+      S.censored = S.censored || {}; S.censored[pv.id] = Date.now();
+      const kk = trackKey(t); if (S.ytCache[kk]) S.ytCache[kk] = S.ytCache[kk].filter(id => id !== pv.id);
+      pv.wrong = bad; saveSoon();
+      try { player.pauseVideo(); } catch (e) {}
+      pv.finish('error');
+    });
     startTrackPoll(t, pv, my);
     const r = await pv.done;
     stopTrackPoll();
+    logPlay(t, pv, pv.wrong ? `skipped: ${pv.wrong}` : r);
     if (!live(my)) return;
     if (r === 'error' || r === 'swap') continue;
     if (r === 'aborted') t.cut = true;
     t.status = 'played';
     break;
   }
-  if (t.status === 'playing') { t.status = 'missing'; toast(`${t.title} wouldn't play here, so it got skipped.`); }
+  if (t.status === 'playing') { t.status = 'missing'; Eng.failed = { t, at: Date.now() }; toast(`${t.title} wouldn't play here, so it got skipped.`); }
   if (t.status !== 'missing') Eng.lastTrack = t;
   Eng.cur = null; save(); renderAll();
 }
@@ -3101,8 +3230,8 @@ function go(view) {
 }
 
 /* ---------- settings ---------- */
-const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'growArtists', 'hostsGrow', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
-const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey'];
+const FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'geminiKey', 'listener', 'station', 'freq', 'artists', 'tasteNotes', 'growArtists', 'hostsGrow', 'artistMax', 'artistHours', 'preferExplicit', 'briefingOn', 'releasesOn', 'briefFocus', 'topics', 'houseRules', 'voiceMode', 'directorModel'];
+const KEY_FIELDS = ['claudeKey', 'ytKey', 'ytKey2', 'ttsKey', 'geminiKey'];
 const MODEL_OPTS = [[HAIKU, 'Haiku 5.5'], ['claude-sonnet-5-5', 'Sonnet 5.5'], ['claude-opus-5-5', 'Opus 5.5']];
 function applyVoiceClass() {
   const m = voiceMode();
@@ -3131,7 +3260,7 @@ function onSettingInput(e) {
   let v = el.type === 'checkbox' ? el.checked : el.value;
   if (KEY_FIELDS.includes(f)) v = String(v).trim();
   S.settings[f] = v;
-  if (f === 'ttsKey' || f === 'ytKey' || f === 'voiceMode') { Voice.naturalBroken = null; Voice.expressiveBroken = null; }
+  if (f === 'ttsKey' || f === 'ytKey' || f === 'geminiKey' || f === 'voiceMode') { Voice.naturalBroken = null; Voice.expressiveBroken = null; Voice.gemRestUntil = 0; Voice.gemModel = null; Voice.gemNetFails = 0; }
   if (f === 'voiceMode') applyVoiceClass();
   if (f === 'artists') renderGrown();
   if (f === 'hostsGrow') renderHostsEditor();
@@ -3431,12 +3560,13 @@ function loadScript(src) {
 function diagReport() {
   const st = S.settings;
   return JSON.stringify({
-    app: 'Lune FM v3.7', at: new Date().toISOString(), browser: navigator.userAgent,
+    app: 'Lune FM v3.8', at: new Date().toISOString(), browser: navigator.userAgent,
     songPicker: st.directorModel, hostModels: [...new Set(activeHosts().map(h => h.model || HAIKU))],
     preferExplicit: preferExplicit(), censoredUploads: Object.keys(S.censored || {}).length,
     voices: voiceMode(), voiceProblems: { expressive: Voice.expressiveBroken, natural: Voice.naturalBroken }, soundEngine: actx ? actx.state : 'none', speedSettingsRefused: Tune.refused,
     onAir: !!Eng.on, upcoming: Eng.upcoming.length, youtube: { left: ytLeft(), use: ytUse(), backupKey: !!ytKeyList()[1] },
-    problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded'
+    problems: Diag.fails.length ? Diag.fails : 'none so far since the page loaded',
+    lastPlays: (S.playLog || []).slice(0, 15)
   }, null, 1);
 }
 async function copyDiag() {
@@ -3460,7 +3590,7 @@ async function copyText(text) {
 
 /* ---------- data ---------- */
 function exportData() {
-  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '' } };
+  const data = { ...S, settings: { ...S.settings, claudeKey: '', ytKey: '', ytKey2: '', ttsKey: '', geminiKey: '' } };
   const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3476,7 +3606,7 @@ function importData(file) {
       const d = JSON.parse(r.result);
       if (!d || !d.settings || !(Array.isArray(d.sessions) || Array.isArray(d.shows))) throw new Error('shape');
       if (Eng.on) haltAir();
-      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey, ytKey2: S.settings.ytKey2, ttsKey: S.settings.ttsKey };
+      const keep = { claudeKey: S.settings.claudeKey, ytKey: S.settings.ytKey, ytKey2: S.settings.ytKey2, ttsKey: S.settings.ttsKey, geminiKey: S.settings.geminiKey };
       localStorage.setItem(LS_KEY, JSON.stringify({ ...d, settings: { ...d.settings, ...keep } }));
       S = loadState();
       Eng.block = null; Eng.session = null; Eng.upcoming = [];
@@ -3651,7 +3781,7 @@ renderAll();
 setInterval(() => { renderHeader(); if (!Eng.on && UI.view === 'air') { renderNowOn(); renderSched(); renderUpNext(); } }, 30000);
 
 // Test hooks (no effect on the app)
-window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, gemPrompt, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid, growArtists, artistsToAdd, setVerdict, versionKind, staleBreak, lastAired, trackState, ageNotebook, overusedPhrases, logTopic, recentTopics, playedByArtist, tooSoon, growHostTaste, dueToGrow, undoHostTaste, maybeGrowHosts, hostSystem, renderHostsEditor };
+window.__lunefm = { versionHint, rankVideos, reportWrong, hasArtist, ytUse, ytLeft, ytSlot, knownSongs, planSet, genBriefing, genReleases, pacificDay, extractJSON, salvageSongs, Keep, keepTags, stripTags, chirpInput, actx: () => actx, hasWholeJSON, Tune, Diag, diagReport, scoreVideo, chunks, cleanHost, norm, parseLine, turnPrompt, hostSystem, castFor, chooseKind, blockAt, minutesLeftInBlock, packSync, unpackSync, syncPayload, mentionsTrack, state: () => S, Eng, Vid, gemText, gemStyle, findAudio, pcmToWav, synth, blockedHere, playingLooksWrong, logPlay, growArtists, artistsToAdd, setVerdict, versionKind, staleBreak, lastAired, trackState, ageNotebook, overusedPhrases, logTopic, recentTopics, playedByArtist, tooSoon, growHostTaste, dueToGrow, undoHostTaste, maybeGrowHosts, hostSystem, renderHostsEditor };
 })();
 
 </script>
